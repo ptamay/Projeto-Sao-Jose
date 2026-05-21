@@ -88,7 +88,18 @@ export function getAvailableBackups() {
 
 export function deleteBackup(filename: string) {
     try {
+        if (typeof filename !== 'string') return false;
+
+        // Aceita apenas nomes de arquivo de backup esperados (sem componentes de caminho)
+        const backupFilenamePattern = /^keys_backup_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.db$/;
+        if (!backupFilenamePattern.test(filename)) return false;
+
         const filePath = path.resolve(backupsDir, filename);
+        const relativePath = path.relative(backupsDir, filePath);
+
+        // Garante que o caminho final permaneça dentro de backupsDir
+        if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) return false;
+
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
             return true;
