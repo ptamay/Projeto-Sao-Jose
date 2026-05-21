@@ -86,9 +86,22 @@ export function getAvailableBackups() {
     }
 }
 
+function isValidBackupFilename(filename: string) {
+    return /^keys_backup_\d{4}-\d{2}-\d{2}\.db$/.test(filename);
+}
+
 export function deleteBackup(filename: string) {
     try {
+        if (!isValidBackupFilename(filename)) {
+            return false;
+        }
+
         const filePath = path.resolve(backupsDir, filename);
+        const normalizedBackupsDir = path.resolve(backupsDir) + path.sep;
+        if (!filePath.startsWith(normalizedBackupsDir)) {
+            return false;
+        }
+
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
             return true;
