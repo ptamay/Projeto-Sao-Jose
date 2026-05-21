@@ -4,6 +4,7 @@ import { verifySession } from '@/lib/session';
 import path from 'path';
 import fs from 'fs';
 import { resetConnection } from '@/lib/db';
+import { isSafeBackupFilename } from '@/lib/backup';
 
 export async function POST(request: Request) {
     try {
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
 
         const body = await request.json();
         const filename = body.filename;
-        if (!filename || !filename.startsWith('keys_backup_') || !filename.endsWith('.db')) {
+        if (!isSafeBackupFilename(filename)) {
             return NextResponse.json({ error: 'Nome de arquivo inválido' }, { status: 400 });
         }
 
