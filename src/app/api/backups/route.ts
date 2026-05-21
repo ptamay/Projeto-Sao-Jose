@@ -43,7 +43,10 @@ export async function DELETE(request: Request) {
 
     try {
         const { filename } = await request.json();
-        if (!filename) return NextResponse.json({ error: 'Nome do arquivo é obrigatório' }, { status: 400 });
+        // Validação estrita do padrão de nome do arquivo para mitigar travessia de caminho (CWE-22)
+        if (typeof filename !== 'string' || !/^keys_backup_\d{4}-\d{2}-\d{2}\.db$/.test(filename)) {
+            return NextResponse.json({ error: 'Nome de arquivo inválido' }, { status: 400 });
+        }
 
         const success = deleteBackup(filename);
         if (success) {

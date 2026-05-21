@@ -15,6 +15,12 @@ export async function POST(request: Request) {
 
         const body = await request.json();
         const filename = body.filename;
+        
+        // Validação estrita do padrão de nome do arquivo para mitigar travessia de caminho (CWE-22)
+        if (typeof filename !== 'string' || !/^keys_backup_\d{4}-\d{2}-\d{2}\.db$/.test(filename)) {
+            return NextResponse.json({ error: 'Nome de arquivo inválido' }, { status: 400 });
+        }
+
         if (!isSafeBackupFilename(filename)) {
             return NextResponse.json({ error: 'Nome de arquivo inválido' }, { status: 400 });
         }
