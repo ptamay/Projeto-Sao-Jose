@@ -1,0 +1,9 @@
+{
+  "name": "Gestão de Chaves SIGA",
+  "short_name": "Chaves",
+  "description": "Sistema Inteligente de Gestão de Chaves - Projeto São José",
+  "start_url": "/login",
+  "display": "standalone",
+  "background_color": "#f8fefd",
+  "theme_color": "#1e293b"
+}

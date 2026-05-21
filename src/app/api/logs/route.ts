@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { cookies } from 'next/headers';
+import { verifySession } from '@/lib/session';
 
 export async function GET(request: Request) {
     try {
@@ -9,7 +10,8 @@ export async function GET(request: Request) {
 
         let session;
         try {
-            session = JSON.parse(sessionCookie.value);
+            session = await verifySession(sessionCookie.value);
+            if (!session) throw new Error('Invalid session');
         } catch {
             return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
         }

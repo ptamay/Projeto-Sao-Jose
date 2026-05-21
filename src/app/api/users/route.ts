@@ -3,11 +3,18 @@ import db from '@/lib/db';
 import bcrypt from 'bcrypt';
 import { cookies } from 'next/headers';
 import { logAction } from '@/lib/logger';
+import { verifySession } from '@/lib/session';
+import { UserSchema } from '@/lib/schemas';
 
 // Get all users
 export async function GET() {
     try {
-        const users = db.prepare('SELECT id, username, role FROM users').all();
+        const sessionCookie = (await cookies()).get('session');
+        if (!sessionCookie) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const session = await verifySession(sessionCookie.value);
+        if (!session || session.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+        const users = db.prepare('SELECT id, username, role FROM users WHERE active = 1').all();
         return NextResponse.json(users);
     } catch (error) {
         return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
@@ -18,32 +25,55 @@ export async function GET() {
 export async function POST(request: Request) {
     try {
         const sessionCookie = (await cookies()).get('session');
-        let currentUser = null;
-        if (sessionCookie) {
-            try { currentUser = JSON.parse(sessionCookie.value); } catch { }
+        if (!sessionCookie) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const currentUser = await verifySession(sessionCookie.value);
+        if (!currentUser || currentUser.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
         const body = await request.json();
-        const { username, password } = body;
-
-        if (!username || !password) {
-            return NextResponse.json({ error: 'Username and password required' }, { status: 400 });
+        const parseResult = UserSchema.safeParse(body);
+        if (!parseResult.success) {
+            return NextResponse.json({ error: parseResult.error.issues[0]?.message || 'Dados inválidos' }, { status: 400 });
         }
+        
+        const { username, password, role } = parseResult.data;
+        
+        const finalRole = role === 'ADMIN' ? 'ADMIN' : 'PORTEIRO';
 
-        const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+        const existing = db.prepare('SELECT id, active FROM users WHERE username = ?').get(username) as any;
         if (existing) {
-            return NextResponse.json({ error: 'Username already exists' }, { status: 400 });
+            if (existing.active === 1) {
+                return NextResponse.json({ error: 'Este usuário já está cadastrado e ativo' }, { status: 400 });
+            } else {
+                // Scenario B: User exists but is inactive
+                const hash = await bcrypt.hash(password, 10);
+                const stmt = db.prepare('UPDATE users SET active = 1, password_hash = ?, role = ? WHERE id = ?');
+                stmt.run(hash, finalRole, existing.id);
+
+                if (currentUser) {
+                    logAction(currentUser.id, currentUser.username, 'REACTIVATE_USER', username, 'User reactivated with new data');
+                }
+
+                return NextResponse.json({
+                    id: existing.id,
+                    username,
+                    role: finalRole,
+                    message: 'Usuário reativado com sucesso',
+                    reactivated: true
+                });
+            }
         }
 
         const hash = await bcrypt.hash(password, 10);
         const stmt = db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)');
-        const info = stmt.run(username, hash, 'USER');
+        const info = stmt.run(username, hash, finalRole);
 
         if (currentUser) {
             logAction(currentUser.id, currentUser.username, 'CREATE_USER', username, `New user created`);
         }
 
-        return NextResponse.json({ id: info.lastInsertRowid, username, role: 'USER' });
+        return NextResponse.json({ id: info.lastInsertRowid, username, role: finalRole });
     } catch (error) {
         console.error('Create user error:', error);
         return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
@@ -65,7 +95,8 @@ export async function DELETE(request: Request) {
         let currentUserId;
         let currentUsername;
         try {
-            const session = JSON.parse(sessionCookie.value);
+            const session = await verifySession(sessionCookie.value);
+            if (!session) throw new Error('Invalid session');
             currentUserId = session.id;
             currentUsername = session.username;
         } catch (e) {
@@ -89,7 +120,7 @@ export async function DELETE(request: Request) {
             }
         }
 
-        const stmt = db.prepare('DELETE FROM users WHERE id = ?');
+        const stmt = db.prepare('UPDATE users SET active = 0 WHERE id = ?');
         const info = stmt.run(id);
 
         if (info.changes === 0) {

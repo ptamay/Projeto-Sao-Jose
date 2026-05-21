@@ -2,12 +2,14 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { cookies } from 'next/headers';
 import { logAction } from '@/lib/logger';
+import { verifySession } from '@/lib/session';
+import { KeySchema } from '@/lib/schemas';
 
 async function getUser() {
     const sessionCookie = (await cookies()).get('session');
     if (!sessionCookie) return null;
     try {
-        return JSON.parse(sessionCookie.value);
+        return await verifySession(sessionCookie.value);
     } catch {
         return null;
     }
@@ -16,10 +18,14 @@ async function getUser() {
 // Get all keys
 export async function GET() {
     try {
+        const user = await getUser();
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
         const keys = db.prepare(`
             SELECT k.*, e.name as employee_name, e.role as employee_role
             FROM keys k 
             LEFT JOIN employees e ON k.employee_id = e.id
+            WHERE k.active = 1
         `).all();
         return NextResponse.json(keys);
     } catch (error) {
@@ -31,12 +37,16 @@ export async function GET() {
 export async function POST(request: Request) {
     try {
         const user = await getUser();
-        const body = await request.json();
-        const { name, room } = body;
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (user.role !== 'ADMIN' && user.role !== 'PORTEIRO') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-        if (!name) {
-            return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+        const body = await request.json();
+        const parseResult = KeySchema.safeParse(body);
+        if (!parseResult.success) {
+            return NextResponse.json({ error: parseResult.error.issues[0]?.message || 'Inválido' }, { status: 400 });
         }
+        
+        const { name, room } = parseResult.data;
 
         // Check for duplicates
         const existing = db.prepare('SELECT id FROM keys WHERE name = ?').get(name);
@@ -61,12 +71,19 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
     try {
         const user = await getUser();
-        const body = await request.json();
-        const { id, name, room } = body;
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (user.role !== 'ADMIN' && user.role !== 'PORTEIRO') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-        if (!id || !name) {
-            return NextResponse.json({ error: 'ID and Name are required' }, { status: 400 });
+        const body = await request.json();
+        const parseResult = KeySchema.safeParse(body);
+        if (!parseResult.success) {
+            return NextResponse.json({ error: parseResult.error.issues[0]?.message || 'Dados inválidos' }, { status: 400 });
         }
+        if (!parseResult.data.id) {
+            return NextResponse.json({ error: 'ID required' }, { status: 400 });
+        }
+        
+        const { id, name, room } = parseResult.data;
 
         const currentKey = db.prepare('SELECT * FROM keys WHERE id = ?').get(id) as any;
 
@@ -92,6 +109,9 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
     try {
         const user = await getUser();
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (user.role !== 'ADMIN' && user.role !== 'PORTEIRO') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
         const body = await request.json();
         const { id } = body;
 
@@ -105,7 +125,7 @@ export async function DELETE(request: Request) {
             return NextResponse.json({ error: 'Não é possível apagar: Chave está em uso.' }, { status: 400 });
         }
 
-        const stmt = db.prepare('DELETE FROM keys WHERE id = ?');
+        const stmt = db.prepare('UPDATE keys SET active = 0 WHERE id = ?');
         stmt.run(id);
 
         if (user) {

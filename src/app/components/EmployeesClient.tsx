@@ -1,230 +1,252 @@
 'use client';
+import { useState, useMemo, useEffect } from 'react';
+import Sidebar from './Sidebar';
+import ConfirmModal from './ConfirmModal';
+import toast from 'react-hot-toast';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Navbar from './Navbar';
+interface Employee { id: number; name: string; role?: string; }
+interface Props { initialEmployees: Employee[]; userRole: string; username?: string; }
 
-type Employee = { id: number; name: string; role: string };
+export default function EmployeesClient({ initialEmployees, userRole, username }: Props) {
+    const [employees, setEmployees] = useState<Employee[]>(initialEmployees || []);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [search, setSearch] = useState('');
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+    const [showForm, setShowForm] = useState(false);
+    const [editEmp, setEditEmp] = useState<Employee | null>(null);
+    const [formName, setFormName] = useState('');
+    const [formRole, setFormRole] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [deleteModal, setDeleteModal] = useState<Employee | null>(null);
 
-export default function EmployeesClient({
-    initialEmployees = [],
-    isAdmin
-}: {
-    initialEmployees: Employee[],
-    isAdmin: boolean
-}) {
-    const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
+    const isAdmin = ['ADMIN', 'PORTEIRO'].includes(userRole);
+    const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
-    // Add Employee States
-    const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
-    const [newEmpName, setNewEmpName] = useState('');
-    const [newEmpRole, setNewEmpRole] = useState('');
+    // Persistência do modo de visualização
+    useEffect(() => {
+        const saved = localStorage.getItem('employees-view') as 'grid' | 'list';
+        if (saved) setViewMode(saved);
+    }, []);
 
-    // Edit Employee States
-    const [showEditEmployeeModal, setShowEditEmployeeModal] = useState(false);
-    const [editingEmpId, setEditingEmpId] = useState<number | null>(null);
-    const [editEmpName, setEditEmpName] = useState('');
-    const [editEmpRole, setEditEmpRole] = useState('');
-
-    const router = useRouter();
-
-    const refreshData = async () => {
-        const res = await fetch('/api/employees');
-        if (res.ok) {
-            setEmployees(await res.json());
-        }
-        router.refresh();
+    const toggleView = (mode: 'grid' | 'list') => {
+        setViewMode(mode);
+        localStorage.setItem('employees-view', mode);
     };
 
-    const handleAddEmployee = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const res = await fetch('/api/employees', {
-            method: 'POST',
-            body: JSON.stringify({ name: newEmpName, role: newEmpRole }),
-            headers: { 'Content-Type': 'application/json' }
-        });
-        if (res.ok) {
-            setShowAddEmployeeModal(false);
-            setNewEmpName('');
-            setNewEmpRole('');
-            refreshData();
-            alert('Funcionário cadastrado com sucesso!');
-        } else {
-            alert('Erro ao cadastrar funcionário.');
-        }
+    const filtered = useMemo(() => {
+        const s = normalize(search);
+        return employees.filter(e =>
+            normalize(e.name).includes(s) ||
+            normalize(e.role || '').includes(s)
+        ).sort((a, b) => a.name.localeCompare(b.name));
+    }, [employees, search]);
+
+    const openNew = () => { setEditEmp(null); setFormName(''); setFormRole(''); setShowForm(true); };
+    const openEdit = (e: Employee) => { setEditEmp(e); setFormName(e.name); setFormRole(e.role || ''); setShowForm(true); };
+
+    const handleSave = async (ev: React.FormEvent) => {
+        ev.preventDefault();
+        if (!formName.trim()) return;
+        setLoading(true);
+        try {
+            const method = editEmp ? 'PUT' : 'POST';
+            const body = editEmp
+                ? { id: editEmp.id, name: formName.trim(), role: formRole.trim() }
+                : { name: formName.trim(), role: formRole.trim() };
+            const res = await fetch('/api/employees', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await res.json();
+            if (res.ok) {
+                if (editEmp) {
+                    setEmployees(prev => prev.map(e => e.id === editEmp.id ? { ...e, name: formName.trim(), role: formRole.trim() } : e));
+                    toast.success('Funcionário atualizado!');
+                } else {
+                    setEmployees(prev => [...prev, { id: data.id, name: formName.trim(), role: formRole.trim() }]);
+                    toast.success('Funcionário cadastrado!');
+                }
+                setShowForm(false);
+            } else { toast.error(data.error || 'Erro ao salvar.'); }
+        } catch { toast.error('Erro de conexão.'); }
+        finally { setLoading(false); }
     };
 
-    const handleEditEmployee = (emp: Employee) => {
-        setEditingEmpId(emp.id);
-        setEditEmpName(emp.name);
-        setEditEmpRole(emp.role);
-        setShowEditEmployeeModal(true);
+    const handleDelete = async () => {
+        if (!deleteModal) return;
+        try {
+            const res = await fetch('/api/employees', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: deleteModal.id }) });
+            const data = await res.json();
+            if (res.ok) {
+                setEmployees(prev => prev.filter(e => e.id !== deleteModal.id));
+                toast.success('Funcionário removido.');
+            } else { toast.error(data.error || 'Erro ao remover.'); }
+        } catch { toast.error('Erro de conexão.'); }
+        setDeleteModal(null);
     };
 
-    const handleSaveEdit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const res = await fetch('/api/employees', {
-            method: 'PUT',
-            body: JSON.stringify({ id: editingEmpId, name: editEmpName, role: editEmpRole }),
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        if (res.ok) {
-            setShowEditEmployeeModal(false);
-            setEditingEmpId(null);
-            refreshData();
-            alert('Funcionário atualizado com sucesso!');
-        } else {
-            alert('Erro ao atualizar funcionário.');
-        }
-    };
-
-    const handleDelete = async (id: number) => {
-        if (!confirm('Deseja realmente confirmar esta ação? (Excluir funcionário)')) return;
-
-        const res = await fetch('/api/employees', {
-            method: 'DELETE',
-            body: JSON.stringify({ id }),
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        if (res.ok) {
-            refreshData();
-            alert('Funcionário removido com sucesso!');
-        } else {
-            const err = await res.json();
-            alert(err.error || 'Falha ao remover funcionário');
-        }
-    };
-
-    const [searchTerm, setSearchTerm] = useState('');
-
-    const filteredEmployees = employees
-        .filter(emp =>
-            emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            emp.role.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-        .sort((a, b) => a.role.localeCompare(b.role));
+    const getInitials = (name: string) => name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
 
     return (
-        <div className="flex flex-col min-h-screen">
-            <Navbar isAdmin={isAdmin} />
+        <div className="page-wrapper">
+            <Sidebar userRole={userRole} username={username} isOpen={sidebarOpen} onMobileClose={() => setSidebarOpen(false)} />
+            <div className="mobile-topbar">
+                <button onClick={() => setSidebarOpen(true)} className="btn btn-ghost btn-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-gold)' }}>Funcionários</span>
+                <div style={{ width: 36 }} />
+            </div>
 
-            <main className="container w-full max-w-7xl mx-auto min-h-content flex-1 mt-4 md:mt-8">
-                <div className="card w-full">
-                    <div style={{ marginBottom: '1.5rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                            <h2 className="text-navy text-xl font-bold m-0">Lista de Funcionários</h2>
-                            {isAdmin && (
-                                <button className="btn btn-gold shadow-md" onClick={() => setShowAddEmployeeModal(true)}>+ Funcionário</button>
-                            )}
-                        </div>
-
-                        <div className="search-wrapper max-w-md relative w-full">
-                            <input
-                                type="text"
-                                placeholder="Filtrar por nome ou cargo..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                style={{
-                                    padding: '0.6rem 1rem',
-                                    paddingLeft: '2.5rem',
-                                    borderRadius: '9999px',
-                                    border: '1px solid #e2e8f0',
-                                    width: '100%',
-                                    outline: 'none',
-                                    backgroundColor: '#f8fafc'
-                                }}
-                            />
-                            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>🔍</span>
-                        </div>
+            <main className="main-content animate-fade">
+                <div className="page-header">
+                    <div>
+                        <h1 className="page-title">Funcionários</h1>
+                        <p className="page-subtitle">Gerencie os funcionários autorizados a retirar chaves</p>
                     </div>
+                    {isAdmin && (
+                        <button className="btn btn-gold" onClick={openNew}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Novo Funcionário
+                        </button>
+                    )}
+                </div>
 
-                    <div className="table-wrapper">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th className="text-navy">Nome</th>
-                                    <th className="text-navy">Cargo</th>
-                                    {isAdmin && <th className="text-navy" style={{ textAlign: 'right' }}>Ações</th>}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredEmployees.map(emp => (
-                                    <tr key={emp.id}>
-                                        <td style={{ fontWeight: 600, color: '#334155' }}>{emp.name}</td>
-                                        <td style={{ color: '#64748b' }}>{emp.role}</td>
-                                        {isAdmin && (
-                                            <td style={{ textAlign: 'right', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                                                <button
-                                                    className="btn btn-outline-navy"
-                                                    onClick={() => handleEditEmployee(emp)}
-                                                    style={{ fontSize: '0.85rem', padding: '0.3rem 0.6rem' }}
-                                                >
-                                                    Editar
-                                                </button>
-                                                <button
-                                                    className="btn btn-outline"
-                                                    onClick={() => handleDelete(emp.id)}
-                                                    style={{ borderColor: '#ef4444', color: '#ef4444', fontSize: '0.85rem', padding: '0.3rem 0.6rem' }}
-                                                >
-                                                    Remover
-                                                </button>
-                                            </td>
-                                        )}
-                                    </tr>
-                                ))}
-                                {filteredEmployees.length === 0 && <tr><td colSpan={isAdmin ? 3 : 2} style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Nenhum funcionário encontrado.</td></tr>}
-                            </tbody>
-                        </table>
+                <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', alignItems: 'center' }}>
+                    <div className="search-bar" style={{ maxWidth: 300 }}>
+                        <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input className="input" style={{ paddingLeft: '2.5rem' }} placeholder="Buscar por nome ou cargo..." value={search} onChange={e => setSearch(e.target.value)} />
+                    </div>
+                    
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <button className={`btn ${viewMode === 'list' ? 'btn-gold' : 'btn-ghost'} btn-sm`} onClick={() => toggleView('list')} title="Ver em Lista">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                        </button>
+                        <button className={`btn ${viewMode === 'grid' ? 'btn-gold' : 'btn-ghost'} btn-sm`} onClick={() => toggleView('grid')} title="Ver em Grade">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        </button>
+                        <div style={{ width: '1px', height: '24px', background: 'var(--border)', margin: '0 0.25rem' }} />
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{filtered.length} total</span>
                     </div>
                 </div>
+
+                {filtered.length === 0 ? (
+                    <div className="empty-state">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ display: 'block', margin: '0 auto 1rem' }}>
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                        <p>Nenhum funcionário encontrado.</p>
+                    </div>
+                ) : viewMode === 'grid' ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+                        {filtered.map(emp => (
+                            <div key={emp.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, var(--navy-600), var(--navy-400))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 700, color: 'var(--text-gold)', flexShrink: 0, border: '2px solid var(--border)' }}>
+                                    {getInitials(emp.name)}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.name}</div>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.125rem' }}>{emp.role || 'Sem cargo definido'}</div>
+                                </div>
+                                {isAdmin && (
+                                    <div style={{ display: 'flex', gap: '0.375rem', flexShrink: 0 }}>
+                                        <button className="btn btn-ghost btn-icon btn-sm" title="Editar" onClick={() => openEdit(emp)}>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                        </button>
+                                        <button className="btn btn-danger btn-icon btn-sm" title="Remover" onClick={() => setDeleteModal(emp)}>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    /* Modo Lista */
+                    <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', overflow: 'hidden' }}>
+                        <div style={{ 
+                            display: 'grid', 
+                            gridTemplateColumns: '70px 1fr 1fr 140px', 
+                            padding: '1rem 2.5rem 1rem 1.5rem', 
+                            background: 'var(--navy-900)', 
+                            borderBottom: '1px solid var(--border)',
+                            fontSize: '0.65rem',
+                            fontWeight: 800,
+                            color: 'white',
+                            letterSpacing: '0.05em',
+                            textTransform: 'uppercase'
+                        }}>
+                            <div style={{ textAlign: 'center' }}>Avatar</div>
+                            <div style={{ textAlign: 'left', paddingLeft: '1rem' }}>Nome Completo</div>
+                            <div style={{ textAlign: 'left' }}>Cargo / Função</div>
+                            <div style={{ textAlign: 'center' }}>Ações</div>
+                        </div>
+
+                        {filtered.map(emp => (
+                            <div key={emp.id} style={{ 
+                                display: 'grid', 
+                                gridTemplateColumns: '70px 1fr 1fr 140px', 
+                                padding: '0.75rem 2.5rem 0.75rem 1.5rem', 
+                                borderBottom: '1px solid var(--border)',
+                                alignItems: 'center',
+                                transition: 'background 0.2s ease'
+                            }} className="list-row-hover">
+                                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--navy-700)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-gold)', border: '1px solid var(--border)' }}>
+                                        {getInitials(emp.name)}
+                                    </div>
+                                </div>
+                                <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem', textAlign: 'left', paddingLeft: '1rem' }}>
+                                    {emp.name}
+                                </div>
+                                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'left' }}>
+                                    {emp.role || '-'}
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
+                                    {isAdmin && (
+                                        <>
+                                            <button className="btn btn-ghost btn-sm" style={{ padding: '0.4rem 0.75rem' }} onClick={() => openEdit(emp)}>
+                                                Editar
+                                            </button>
+                                            <button className="btn btn-danger btn-sm" style={{ padding: '0.4rem 0.75rem' }} onClick={() => setDeleteModal(emp)}>
+                                                Remover
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </main>
 
-            {/* Add Employee Modal */}
-            {showAddEmployeeModal && (
-                <div className="modal-overlay" onClick={() => setShowAddEmployeeModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-navy" style={{ marginBottom: '1.5rem' }}>Novo Funcionário</h3>
-                        <form onSubmit={handleAddEmployee}>
-                            <div className="form-group">
-                                <label>Nome Completo</label>
-                                <input value={newEmpName} onChange={e => setNewEmpName(e.target.value)} required placeholder="Ex: João Silva" />
+            {showForm && (
+                <div className="modal-overlay" onClick={() => setShowForm(false)}>
+                    <div className="modal-box" onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3 className="modal-title">{editEmp ? 'Editar Funcionário' : 'Novo Funcionário'}</h3>
+                            <button className="btn btn-ghost btn-icon" onClick={() => setShowForm(false)}>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                        </div>
+                        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div className="input-group">
+                                <label className="input-label">Nome Completo *</label>
+                                <input className="input" placeholder="Ex: João da Silva" value={formName} onChange={e => setFormName(e.target.value)} required />
                             </div>
-                            <div className="form-group">
-                                <label>Cargo/Função</label>
-                                <input value={newEmpRole} onChange={e => setNewEmpRole(e.target.value)} placeholder="Ex: Professor" />
+                            <div className="input-group">
+                                <label className="input-label">Cargo / Função</label>
+                                <input className="input" placeholder="Ex: Professor, Auxiliar..." value={formRole} onChange={e => setFormRole(e.target.value)} />
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem' }}>
-                                <button type="button" className="btn btn-outline-navy" onClick={() => setShowAddEmployeeModal(false)}>Cancelar</button>
-                                <button type="submit" className="btn btn-primary">Salvar</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-            {/* Edit Employee Modal */}
-            {showEditEmployeeModal && (
-                <div className="modal-overlay" onClick={() => setShowEditEmployeeModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-navy" style={{ marginBottom: '1.5rem' }}>Editar Funcionário</h3>
-                        <form onSubmit={handleSaveEdit}>
-                            <div className="form-group">
-                                <label>Nome Completo</label>
-                                <input value={editEmpName} onChange={e => setEditEmpName(e.target.value)} required />
-                            </div>
-                            <div className="form-group">
-                                <label>Cargo/Função</label>
-                                <input value={editEmpRole} onChange={e => setEditEmpRole(e.target.value)} />
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem' }}>
-                                <button type="button" className="btn btn-outline-navy" onClick={() => setShowEditEmployeeModal(false)}>Cancelar</button>
-                                <button type="submit" className="btn btn-primary">Salvar Alterações</button>
+                            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                                <button type="button" className="btn btn-ghost" onClick={() => setShowForm(false)}>Cancelar</button>
+                                <button type="submit" className="btn btn-gold" disabled={loading}>
+                                    {loading ? <div className="spinner" style={{ width: 16, height: 16 }} /> : (editEmp ? 'Salvar' : 'Cadastrar')}
+                                </button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
+
+            <ConfirmModal isOpen={!!deleteModal} title="Remover Funcionário" message={`Deseja remover "${deleteModal?.name}"?`} confirmText="Remover" onConfirm={handleDelete} onCancel={() => setDeleteModal(null)} />
         </div>
     );
 }

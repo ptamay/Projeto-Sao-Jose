@@ -1,36 +1,26 @@
-import { cookies } from 'next/headers';
+﻿import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { verifySession } from '@/lib/session';
 import db from '@/lib/db';
 import EmployeesClient from '../components/EmployeesClient';
 
-function getData() {
-    const employees = db.prepare("SELECT * FROM employees ORDER BY name ASC").all();
-    return { employees };
-}
-
 export default async function EmployeesPage() {
     const sessionCookie = (await cookies()).get('session');
-
-    if (!sessionCookie) {
-        redirect('/login');
-    }
+    if (!sessionCookie) redirect('/login');
 
     let session;
     try {
-        session = JSON.parse(sessionCookie.value);
+        session = await verifySession(sessionCookie.value);
+        if (!session) throw new Error();
         const user = db.prepare('SELECT id FROM users WHERE id = ?').get(session.id);
-        if (!user) {
-            redirect('/login');
-        }
-    } catch (e) {
-        redirect('/login');
-    }
-    const { employees } = getData();
-    const isAdmin = session.role === 'ADMIN';
+        if (!user) redirect('/login');
+    } catch { redirect('/login'); }
+
+    const employees = db.prepare('SELECT * FROM employees WHERE active = 1 ORDER BY name ASC').all();
 
     return (
         <main>
-            <EmployeesClient initialEmployees={employees as any} isAdmin={isAdmin} />
+            <EmployeesClient initialEmployees={employees as any} userRole={session.role} username={session.username} />
         </main>
     );
 }

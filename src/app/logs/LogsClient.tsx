@@ -1,159 +1,174 @@
 'use client';
-
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import Navbar from '../components/Navbar';
+import Sidebar from '../components/Sidebar';
 
-// Note: Logs are usually Admin only. The page loader should handle access control or redirect.
-// We'll pass isAdmin as a prop if possible or assume LogsClient is protected.
-
-interface LogItem {
+interface Log {
     id: number;
-    user_id: number | null;
     username: string;
     action: string;
-    target: string | null;
-    details: string | null;
+    target: string;
+    details?: string;
     timestamp: string;
-    // We should probably know if the viewer is admin to show this page properly, but let's assume valid access for now and pass isAdmin=true since only admins see the link.
 }
 
+function formatDate(ts: string) {
+    try { return new Date(ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+    catch { return ts; }
+}
+
+const actionColors: Record<string, string> = {
+    CREATE: '#4ade80', UPDATE: '#60a5fa', DELETE: '#f87171', LOGIN: '#c084fc',
+    LOGOUT: '#94a3b8', WITHDRAW: '#fb923c', RETURN: '#4ade80',
+};
+const getColor = (action: string) => {
+    const key = Object.keys(actionColors).find(k => action.toUpperCase().includes(k));
+    return key ? actionColors[key] : '#e0be68';
+};
+
 export default function LogsClient() {
-    const [logs, setLogs] = useState<LogItem[]>([]);
+    const [logs, setLogs] = useState<Log[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
+    const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
-    const router = useRouter();
-
-    const fetchLogs = async () => {
-        setLoading(true);
-        try {
-            const params = new URLSearchParams({
-                page: page.toString(),
-                limit: '50',
-                search: searchTerm
-            });
-            const res = await fetch(`/api/logs?${params.toString()}`);
-            if (res.ok) {
-                const data = await res.json();
-                setLogs(data.logs);
-                setTotalPages(data.totalPages);
-            } else {
-                if (res.status === 401 || res.status === 403) {
-                    router.push('/');
-                }
-            }
-        } catch (error) {
-            console.error('Failed to fetch logs', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            fetchLogs();
-        }, 300); // Debounce search
-        return () => clearTimeout(timer);
-    }, [page, searchTerm]);
+        loadLogs();
+    }, [page, search]);
+
+    const loadLogs = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch(`/api/logs?page=${page}&limit=20&search=${encodeURIComponent(search)}`);
+            const d = await res.json();
+            if (d.logs) {
+                setLogs(d.logs);
+                setTotalPages(d.totalPages || 1);
+            } else {
+                setLogs([]);
+            }
+        } catch (error) {
+            console.error('Error loading logs:', error);
+            setLogs([]);
+        }
+        setLoading(false);
+    };
+
+    // Debounced search could be better, but for now simple input
+    const handleSearch = (val: string) => {
+        setSearch(val);
+        setPage(1); // Reset to first page on search
+    };
 
     return (
-        <div className="flex flex-col min-h-screen">
-            <Navbar isAdmin={true} /> {/* Logs are generally Admin only */}
+        <div className="page-wrapper">
+            <Sidebar userRole="ADMIN" username="admin" isOpen={sidebarOpen} onMobileClose={() => setSidebarOpen(false)} />
+            <div className="mobile-topbar">
+                <button onClick={() => setSidebarOpen(true)} className="btn btn-ghost btn-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-gold)' }}>Logs de Auditoria</span>
+                <div style={{ width: 36 }} />
+            </div>
 
-            <main className="container w-full max-w-7xl mx-auto min-h-content flex-1 mt-4 md:mt-8">
-                <div className="card w-full">
-                    <div style={{ marginBottom: '1.5rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                            <h2 className="text-navy text-xl font-bold m-0">Log de Ações</h2>
-                        </div>
-
-                        <div className="search-wrapper max-w-md relative w-full">
-                            <input
-                                type="text"
-                                placeholder="Buscar por usuário, ação ou alvo..."
-                                value={searchTerm}
-                                onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
-                                style={{
-                                    padding: '0.6rem 1rem',
-                                    paddingLeft: '2.5rem',
-                                    borderRadius: '9999px',
-                                    border: '1px solid #e2e8f0',
-                                    width: '100%',
-                                    outline: 'none',
-                                    backgroundColor: '#f8fafc'
-                                }}
-                            />
-                            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>🔍</span>
-                        </div>
+            <main className="main-content animate-fade">
+                <div className="page-header">
+                    <div>
+                        <h1 className="page-title">Logs de Auditoria</h1>
+                        <p className="page-subtitle">Rastro completo de ações administrativas no sistema</p>
                     </div>
+                    <div className="badge badge-admin" style={{ padding: '0.5rem 1rem', height: 'fit-content' }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'currentColor', marginRight: '0.5rem', boxShadow: '0 0 8px currentColor' }} />
+                        Somente leitura
+                    </div>
+                </div>
 
-                    <div className="table-wrapper">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th className="text-navy">Data/Hora</th>
-                                    <th className="text-navy">Usuário Responsável</th>
-                                    <th className="text-navy">Ação Realizada</th>
-                                    <th className="text-navy">Alvo da Ação</th>
-                                    <th className="text-navy">Detalhes</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {loading ? (
-                                    <tr><td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Carregando...</td></tr>
-                                ) : logs.length > 0 ? (
-                                    logs.map(log => (
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', alignItems: 'center' }}>
+                    <div className="search-bar" style={{ maxWidth: 360 }}>
+                        <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input className="input" style={{ paddingLeft: '2.5rem' }} placeholder="Buscar usuário, ação ou alvo..." value={search} onChange={e => handleSearch(e.target.value)} />
+                    </div>
+                    <div style={{ marginLeft: 'auto', fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                        Página {page} de {totalPages}
+                    </div>
+                </div>
+
+                {loading ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '6rem' }}><div className="spinner" style={{ width: 40, height: 40 }} /></div>
+                ) : (
+                    <>
+                        <div className="table-wrapper card">
+                            <table className="table">
+                                <thead>
+                                    <tr>
+                                        <th>Data / Hora</th>
+                                        <th>Usuário</th>
+                                        <th style={{ textAlign: 'center' }}>Ação</th>
+                                        <th>Alvo</th>
+                                        <th>Detalhes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {logs.length === 0 ? (
+                                        <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '5rem' }}>Nenhum log encontrado para esta busca.</td></tr>
+                                    ) : logs.map(log => (
                                         <tr key={log.id}>
-                                            <td style={{ color: '#334155' }}>{new Date(log.timestamp).toLocaleString('pt-BR')}</td>
-                                            <td><strong>{log.username}</strong></td>
+                                            <td style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>{formatDate(log.timestamp)}</td>
                                             <td>
-                                                <span style={{
-                                                    fontSize: '0.85rem',
-                                                    padding: '2px 8px',
-                                                    borderRadius: '12px',
-                                                    background: '#f1f5f9',
-                                                    color: '#475569',
-                                                    fontWeight: 500,
-                                                    border: '1px solid #e2e8f0'
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                                                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--navy-700)', color: 'var(--gold-400)', border: '1px solid var(--gold-400)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 800 }}>
+                                                        {log.username?.[0]?.toUpperCase() || 'U'}
+                                                    </div>
+                                                    <span style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)' }}>{log.username || '-'}</span>
+                                                </div>
+                                            </td>
+                                            <td style={{ textAlign: 'center' }}>
+                                                <span style={{ 
+                                                    display: 'inline-flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '0.375rem', 
+                                                    fontSize: '0.65rem', 
+                                                    fontWeight: 800, 
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.05em',
+                                                    padding: '0.3rem 0.75rem', 
+                                                    borderRadius: '999px', 
+                                                    background: `${getColor(log.action)}12`, 
+                                                    color: getColor(log.action),
+                                                    border: `1px solid ${getColor(log.action)}25`
                                                 }}>
+                                                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: getColor(log.action), boxShadow: `0 0 6px ${getColor(log.action)}` }} />
                                                     {log.action}
                                                 </span>
                                             </td>
-                                            <td>{log.target || '-'}</td>
-                                            <td style={{ color: '#64748b', fontSize: '0.9rem' }}>{log.details || '-'}</td>
+                                            <td style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', fontWeight: 500 }}>{log.target || '-'}</td>
+                                            <td style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={log.details}>
+                                                {log.details || '-'}
+                                            </td>
                                         </tr>
-                                    ))
-                                ) : (
-                                    <tr><td colSpan={5} style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Nenhum registro encontrado.</td></tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #f1f5f9' }}>
-                        <button
-                            className="btn btn-outline-navy"
-                            disabled={page === 1}
-                            onClick={() => setPage(p => Math.max(1, p - 1))}
-                            style={{ opacity: page === 1 ? 0.5 : 1 }}
-                        >
-                            Anterior
-                        </button>
-                        <span style={{ color: '#64748b' }}>Página {page} de {totalPages}</span>
-                        <button
-                            className="btn btn-outline-navy"
-                            disabled={page >= totalPages}
-                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                            style={{ opacity: page >= totalPages ? 0.5 : 1 }}
-                        >
-                            Próxima
-                        </button>
-                    </div>
-                </div>
+                        {totalPages > 1 && (
+                            <div className="pagination" style={{ marginTop: '1.5rem', justifyContent: 'flex-end' }}>
+                                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+                                </button>
+                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                                    <button key={p} className={page === p ? 'active' : ''} onClick={() => setPage(p)}>{p}</button>
+                                ))}
+                                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                                </button>
+                            </div>
+                        )}
+                    </>
+                )}
             </main>
         </div>
     );
 }
+

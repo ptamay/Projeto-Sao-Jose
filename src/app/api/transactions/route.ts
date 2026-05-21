@@ -1,29 +1,47 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
+import { cookies } from 'next/headers';
+import { verifySession } from '@/lib/session';
+import { TransactionSchema } from '@/lib/schemas';
 
 export async function POST(request: Request) {
     try {
-        const body = await request.json();
-        const { action, keyId, employeeId } = body;
+        const sessionCookie = (await cookies()).get('session');
+        if (!sessionCookie) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const session = await verifySession(sessionCookie.value);
+        if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-        // action: 'withdraw' | 'return'
-        if (!action || !keyId) {
-            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+        const body = await request.json();
+        const parseResult = TransactionSchema.safeParse(body);
+        if (!parseResult.success) {
+            return NextResponse.json({ error: parseResult.error.issues[0]?.message || 'Dados inválidos' }, { status: 400 });
         }
+        
+        const { action, key_id: keyId, employee_id: employeeId } = parseResult.data;
 
         const key = db.prepare('SELECT * FROM keys WHERE id = ?').get(keyId) as any;
         if (!key) {
             return NextResponse.json({ error: 'Key not found' }, { status: 404 });
         }
 
+        if (key.active === 0) {
+            return NextResponse.json({ error: 'Esta chave foi desativada e não pode ser usada.' }, { status: 400 });
+        }
+
         if (action === 'withdraw') {
             if (!employeeId) return NextResponse.json({ error: 'Employee required for withdrawal' }, { status: 400 });
+            
+            const employee = db.prepare('SELECT active FROM employees WHERE id = ?').get(employeeId) as any;
+            if (!employee || employee.active === 0) {
+                return NextResponse.json({ error: 'Este funcionário foi desativado e não pode retirar chaves.' }, { status: 400 });
+            }
+
             if (key.status !== 'available') return NextResponse.json({ error: 'Key is already in use' }, { status: 400 });
 
             // Transaction
             const trans = db.transaction(() => {
                 db.prepare("UPDATE keys SET status = 'in_use', employee_id = ? WHERE id = ?").run(employeeId, keyId);
-                db.prepare("INSERT INTO history (key_id, employee_id, action) VALUES (?, ?, 'withdraw')").run(keyId, employeeId);
+                db.prepare("INSERT INTO history (key_id, employee_id, action, timestamp, user_id, username) VALUES (?, ?, 'withdraw', ?, ?, ?)").run(keyId, employeeId, new Date().toISOString(), session.id, session.username);
             });
             trans();
 
@@ -40,7 +58,7 @@ export async function POST(request: Request) {
                 const currentHolder = key.employee_id;
 
                 db.prepare("UPDATE keys SET status = 'available', employee_id = NULL WHERE id = ?").run(keyId);
-                db.prepare("INSERT INTO history (key_id, employee_id, action) VALUES (?, ?, 'return')").run(keyId, employeeId || currentHolder || null);
+                db.prepare("INSERT INTO history (key_id, employee_id, action, timestamp, user_id, username) VALUES (?, ?, 'return', ?, ?, ?)").run(keyId, employeeId || currentHolder || null, new Date().toISOString(), session.id, session.username);
             });
             trans();
 
