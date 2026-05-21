@@ -34,9 +34,10 @@ export const EmployeeSchema = z.object({
 
 // Transactions (History Actions)
 export const TransactionSchema = z.object({
-    action: z.enum(['withdraw', 'return']),
+    action: z.enum(['withdraw', 'return', 'transfer']),
     key_id: z.number().int().positive("ID da chave inválido."),
-    employee_id: z.number().int().positive("ID do funcionário inválido.").nullable().optional()
+    employee_id: z.number().int().positive("ID do funcionário inválido.").nullable().optional(),
+    observation: z.string().optional()
 });
 
 // Settings

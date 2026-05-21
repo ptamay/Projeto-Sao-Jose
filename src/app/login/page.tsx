@@ -1,8 +1,10 @@
 'use client';
 import { useState } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
+    const router = useRouter();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -20,7 +22,8 @@ export default function LoginPage() {
                 body: JSON.stringify({ username, password }),
             });
             if (res.ok) {
-                window.location.href = '/';
+                router.push('/');
+                router.refresh();
             } else {
                 const data = await res.json();
                 setError(data.error || 'Credenciais inválidas. Tente novamente.');

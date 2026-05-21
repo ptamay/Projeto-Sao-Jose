@@ -71,34 +71,35 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
         open: boolean;
         keyId: number;
         keyName: string;
-        type: 'withdraw' | 'return';
+        type: 'withdraw' | 'return' | 'transfer';
         employeeId?: number;
         employeeName?: string;
+        observation?: string;
     }>({ open: false, keyId: 0, keyName: '', type: 'withdraw' });
 
     // Processamento Real da Transação (Chamado pelo Modal)
-    const handleTransaction = async (keyId: number, type: 'withdraw' | 'return', employeeId?: number) => {
+    const handleTransaction = async (keyId: number, type: 'withdraw' | 'return' | 'transfer', employeeId?: number, observation?: string) => {
         setActionLoading(keyId);
         try {
             const res = await fetch('/api/transactions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: type, key_id: keyId, employee_id: employeeId || null }),
+                body: JSON.stringify({ action: type, key_id: keyId, employee_id: employeeId || null, observation }),
             });
             const data = await res.json();
             if (res.ok) {
                 setKeys(prev => prev.map(k => {
                     if (k.id !== keyId) return k;
-                    if (type === 'withdraw') {
+                    if (type === 'withdraw' || type === 'transfer') {
                         const emp = employees.find(e => e.id === employeeId);
                         return { ...k, status: 'in_use', employee_id: employeeId, employee_name: emp?.name, employee_role: emp?.role };
                     }
                     return { ...k, status: 'available', employee_id: undefined, employee_name: undefined, employee_role: undefined };
                 }));
-                if (type === 'withdraw') {
+                if (type === 'withdraw' || type === 'transfer') {
                     setSelectedEmployee(prev => { const n = { ...prev }; delete n[keyId]; return n; });
                 }
-                toast.success(type === 'withdraw' ? 'Chave retirada com sucesso!' : 'Chave devolvida!');
+                toast.success(type === 'withdraw' ? 'Chave retirada com sucesso!' : type === 'transfer' ? 'Chave transferida com sucesso!' : 'Chave devolvida!');
             } else {
                 toast.error(data.error || 'Erro na operação.');
             }
@@ -111,7 +112,7 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
     };
 
     // Solicitação de Transação (Abre o Modal)
-    const requestTransaction = (keyId: number, type: 'withdraw' | 'return', manualEmployeeId?: number) => {
+    const requestTransaction = (keyId: number, type: 'withdraw' | 'return' | 'transfer', manualEmployeeId?: number) => {
         const key = keys.find(k => k.id === keyId);
         if (!key) return;
 
@@ -128,13 +129,18 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
             keyName: key.name,
             type,
             employeeId,
-            employeeName: emp?.name
+            employeeName: emp?.name,
+            observation: ''
         });
         modalOpenTime.current = Date.now();
     };
 
     const confirmAction = () => {
-        handleTransaction(confirmModal.keyId, confirmModal.type, confirmModal.employeeId);
+        if (confirmModal.type === 'transfer' && !confirmModal.employeeId) {
+            toast.error('Selecione o funcionário para transferir.');
+            return;
+        }
+        handleTransaction(confirmModal.keyId, confirmModal.type, confirmModal.employeeId, confirmModal.observation);
         // Limpar inputs da ação rápida se existirem
         setKeySuggestions([]); 
         setEmpSuggestions([]);
@@ -598,19 +604,24 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
 
                                 <div style={{ marginTop: 'auto', paddingTop: '0.5rem' }}>
                                     {key.status === 'in_use' && (
-                                        <button
-                                            className="btn btn-navy btn-sm"
-                                            disabled={actionLoading === key.id}
-                                            onClick={() => requestTransaction(key.id, 'return')}
-                                            style={{ width: '100%', height: '42px', gap: '0.625rem' }}
-                                        >
-                                            {actionLoading === key.id ? <div className="spinner" style={{ width: 16, height: 16 }} /> : (
-                                                <>
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
-                                                    Devolver Chave
-                                                </>
-                                            )}
-                                        </button>
+                                        <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+                                            <button
+                                                className="btn btn-navy btn-sm"
+                                                disabled={actionLoading === key.id}
+                                                onClick={() => requestTransaction(key.id, 'return')}
+                                                style={{ flex: 1, height: '42px', gap: '0.625rem' }}
+                                            >
+                                                {actionLoading === key.id ? <div className="spinner" style={{ width: 16, height: 16 }} /> : 'Devolver'}
+                                            </button>
+                                            <button
+                                                className="btn btn-ghost btn-sm"
+                                                disabled={actionLoading === key.id}
+                                                onClick={() => requestTransaction(key.id, 'transfer')}
+                                                style={{ flex: 1, height: '42px', gap: '0.625rem', border: '1px solid var(--border)' }}
+                                            >
+                                                Transferir
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -622,7 +633,7 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                         <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', overflow: 'hidden' }}>
                             <div style={{ 
                                 display: 'grid', 
-                                gridTemplateColumns: '1.5fr 1fr 1.8fr 140px 120px', 
+                                gridTemplateColumns: '1.5fr 1fr 1.6fr 110px 160px', 
                                 padding: '1rem 1rem 1rem 2.5rem', 
                                 gap: '1rem',
                                 background: 'var(--navy-900)', 
@@ -648,7 +659,7 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                                 filtered.map(key => (
                                     <div key={key.id} style={{ 
                                         display: 'grid', 
-                                        gridTemplateColumns: '1.5fr 1fr 1.8fr 140px 120px', 
+                                        gridTemplateColumns: '1.5fr 1fr 1.6fr 110px 160px', 
                                         padding: '1rem 1rem 1rem 2.5rem', 
                                         gap: '1rem',
                                         borderBottom: '1px solid var(--border)',
@@ -706,7 +717,7 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                                                 {key.status === 'available' ? 'Disponível' : 'Em Uso'}
                                             </span>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
                                             {key.status === 'available' ? (
                                                 <button
                                                     className="btn btn-gold btn-sm"
@@ -717,6 +728,7 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                                                     Retirar
                                                 </button>
                                             ) : (
+                                                <>
                                                 <button
                                                     className="btn btn-navy btn-sm"
                                                     disabled={actionLoading === key.id}
@@ -725,6 +737,16 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                                                 >
                                                     Devolver
                                                 </button>
+                                                <button
+                                                    className="btn btn-ghost btn-sm"
+                                                    disabled={actionLoading === key.id}
+                                                    onClick={() => requestTransaction(key.id, 'transfer')}
+                                                    style={{ padding: '0.4rem', border: '1px solid var(--border)' }}
+                                                    title="Transferir"
+                                                >
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="14" x2="21" y2="3"/><polyline points="8 21 3 21 3 16"/><line x1="20" y1="10" x2="3" y2="21"/></svg>
+                                                </button>
+                                                </>
                                             )}
                                         </div>
                                     </div>
@@ -748,14 +770,41 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                                 )}
                             </div>
                             <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--navy-900)', marginBottom: '0.5rem' }}>
-                                Confirmar {confirmModal.type === 'withdraw' ? 'Retirada' : 'Devolução'}?
+                                {confirmModal.type === 'withdraw' ? 'Confirmar Retirada?' : confirmModal.type === 'transfer' ? 'Confirmar Transferência?' : 'Confirmar Devolução?'}
                             </h3>
                             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.5' }}>
-                                Você está prestes a {confirmModal.type === 'withdraw' ? 'entregar' : 'receber'} a chave <strong style={{ color: 'var(--navy-900)' }}>"{confirmModal.keyName}"</strong> 
+                                Você está prestes a {confirmModal.type === 'withdraw' ? 'entregar' : confirmModal.type === 'transfer' ? 'transferir' : 'receber'} a chave <strong style={{ color: 'var(--navy-900)' }}>"{confirmModal.keyName}"</strong> 
                                 {confirmModal.type === 'withdraw' && (
                                     <span> para <strong style={{ color: 'var(--gold-600)' }}>{confirmModal.employeeName}</strong></span>
                                 )}.
                             </p>
+                            {confirmModal.type === 'transfer' && (
+                                <div style={{ marginTop: '1rem', textAlign: 'left' }}>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>Para quem?</label>
+                                    <select 
+                                        className="input" 
+                                        style={{ width: '100%', marginTop: '0.25rem', height: '38px', fontSize: '0.8rem', padding: '0.5rem 0.75rem' }}
+                                        value={confirmModal.employeeId || ''}
+                                        onChange={e => setConfirmModal(prev => ({ ...prev, employeeId: Number(e.target.value) }))}
+                                    >
+                                        <option value="">Selecione um funcionário...</option>
+                                        {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+                                    </select>
+                                </div>
+                            )}
+                            {(confirmModal.type === 'withdraw' || confirmModal.type === 'transfer') && (
+                                <div style={{ marginTop: '1rem', textAlign: 'left' }}>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>Observação (opcional)</label>
+                                    <input 
+                                        type="text"
+                                        className="input"
+                                        placeholder="Ex: Para manutenção..."
+                                        value={confirmModal.observation || ''}
+                                        onChange={e => setConfirmModal(prev => ({ ...prev, observation: e.target.value }))}
+                                        style={{ width: '100%', marginTop: '0.25rem', height: '38px', fontSize: '0.8rem' }}
+                                    />
+                                </div>
+                            )}
                         </div>
                         <div style={{ padding: '1rem', background: '#f8fafc', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                             <button 

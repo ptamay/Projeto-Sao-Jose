@@ -11,6 +11,7 @@ const dbPath = path.resolve(process.cwd(), 'keys.db');
 
 export function initDb() {
     const instance = new Database(dbPath);
+    instance.pragma('journal_mode = WAL');
     instance.pragma('foreign_keys = ON');
     globalWithDb.db = instance;
     console.log('Database connected.');

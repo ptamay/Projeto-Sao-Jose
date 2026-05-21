@@ -29,6 +29,7 @@ db.exec(`
     room TEXT,
     status TEXT DEFAULT 'available', -- 'available', 'in_use'
     employee_id INTEGER,
+    observation TEXT,
     active INTEGER DEFAULT 1,
     FOREIGN KEY(employee_id) REFERENCES employees(id)
   );
@@ -37,8 +38,11 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     employee_id INTEGER,
     key_id INTEGER,
-    action TEXT, -- 'withdraw', 'return'
+    action TEXT, -- 'withdraw', 'return', 'transfer'
+    observation TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    user_id INTEGER,
+    username TEXT,
     FOREIGN KEY(key_id) REFERENCES keys(id)
   );
 

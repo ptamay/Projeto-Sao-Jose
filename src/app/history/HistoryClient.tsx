@@ -117,8 +117,14 @@ export default function HistoryClient({ history, userRole, username, currentPage
                                 <tr key={h.id}>
                                     <td style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>{formatDate(h.timestamp)}</td>
                                     <td>
-                                        <span className={`status-tag ${h.action === 'withdraw' ? 'status-inuse' : 'status-available'}`}>
-                                            {h.action === 'withdraw' ? 'Retirada' : 'Devolução'}
+                                        <span className={`status-tag ${
+                                            h.action === 'withdraw' ? 'status-inuse' :
+                                            h.action === 'transfer' ? 'status-transfer' :
+                                            'status-available'
+                                        }`}>
+                                            {h.action === 'withdraw' ? 'Retirada' :
+                                             h.action === 'transfer' ? 'Transferido' :
+                                             'Devolução'}
                                         </span>
                                     </td>
                                     <td>

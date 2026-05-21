@@ -17,7 +17,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: parseResult.error.issues[0]?.message || 'Dados inválidos' }, { status: 400 });
         }
         
-        const { action, key_id: keyId, employee_id: employeeId } = parseResult.data;
+        const { action, key_id: keyId, employee_id: employeeId, observation } = parseResult.data;
 
         const key = db.prepare('SELECT * FROM keys WHERE id = ?').get(keyId) as any;
         if (!key) {
@@ -40,8 +40,8 @@ export async function POST(request: Request) {
 
             // Transaction
             const trans = db.transaction(() => {
-                db.prepare("UPDATE keys SET status = 'in_use', employee_id = ? WHERE id = ?").run(employeeId, keyId);
-                db.prepare("INSERT INTO history (key_id, employee_id, action, timestamp, user_id, username) VALUES (?, ?, 'withdraw', ?, ?, ?)").run(keyId, employeeId, new Date().toISOString(), session.id, session.username);
+                db.prepare("UPDATE keys SET status = 'in_use', employee_id = ?, observation = ? WHERE id = ?").run(employeeId, observation || null, keyId);
+                db.prepare("INSERT INTO history (key_id, employee_id, action, observation, timestamp, user_id, username) VALUES (?, ?, 'withdraw', ?, ?, ?, ?)").run(keyId, employeeId, observation || null, new Date().toISOString(), session.id, session.username);
             });
             trans();
 
@@ -57,8 +57,23 @@ export async function POST(request: Request) {
 
                 const currentHolder = key.employee_id;
 
-                db.prepare("UPDATE keys SET status = 'available', employee_id = NULL WHERE id = ?").run(keyId);
+                db.prepare("UPDATE keys SET status = 'available', employee_id = NULL, observation = NULL WHERE id = ?").run(keyId);
                 db.prepare("INSERT INTO history (key_id, employee_id, action, timestamp, user_id, username) VALUES (?, ?, 'return', ?, ?, ?)").run(keyId, employeeId || currentHolder || null, new Date().toISOString(), session.id, session.username);
+            });
+            trans();
+
+        } else if (action === 'transfer') {
+            if (key.status !== 'in_use') return NextResponse.json({ error: 'Key must be in use to transfer' }, { status: 400 });
+            if (!employeeId) return NextResponse.json({ error: 'New employee required for transfer' }, { status: 400 });
+            
+            const employee = db.prepare('SELECT active FROM employees WHERE id = ?').get(employeeId) as any;
+            if (!employee || employee.active === 0) {
+                return NextResponse.json({ error: 'Este funcionário foi desativado e não pode receber chaves.' }, { status: 400 });
+            }
+
+            const trans = db.transaction(() => {
+                db.prepare("UPDATE keys SET employee_id = ?, observation = ? WHERE id = ?").run(employeeId, observation || key.observation || null, keyId);
+                db.prepare("INSERT INTO history (key_id, employee_id, action, observation, timestamp, user_id, username) VALUES (?, ?, 'transfer', ?, ?, ?, ?)").run(keyId, employeeId, observation || key.observation || null, new Date().toISOString(), session.id, session.username);
             });
             trans();
 

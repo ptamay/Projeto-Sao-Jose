@@ -95,7 +95,8 @@ export default function Sidebar({ userRole, username, onMobileClose, isOpen }: S
 
     const handleLogout = async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
-        window.location.href = '/login';
+        router.push('/login');
+        router.refresh();
     };
 
     // Auto logout check
