@@ -15,8 +15,8 @@ const navItems = [
         section: 'Principal',
         items: [
             { href: '/', label: 'Dashboard', icon: 'grid', roles: ['ADMIN','PORTEIRO','USER'] },
-            { href: '/keys', label: 'Chaves', icon: 'key', roles: ['ADMIN','PORTEIRO','USER'] },
-            { href: '/employees', label: 'Funcionários', icon: 'users', roles: ['ADMIN','PORTEIRO','USER'] },
+            { href: '/keys', label: 'Itens & Chaves', icon: 'key', roles: ['ADMIN','PORTEIRO','USER'] },
+            { href: '/employees', label: 'Pessoas & Locais', icon: 'users', roles: ['ADMIN','PORTEIRO','USER'] },
         ]
     },
     {
@@ -142,7 +142,7 @@ export default function Sidebar({ userRole, username, onMobileClose, isOpen }: S
                             <Image src="/logo/logo.png" alt="CSJ" width={42} height={42} style={{ borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
                             <div className="sidebar-logo-text">
                                 <div style={{ whiteSpace: 'nowrap' }}>Colégio São José</div>
-                                <div style={{ fontSize: '0.68rem', color: 'var(--navy-300)', whiteSpace: 'nowrap', marginTop: '2px', opacity: 0.9 }}>Gestão de Chaves</div>
+                                <div style={{ fontSize: '0.68rem', color: 'var(--navy-300)', whiteSpace: 'nowrap', marginTop: '2px', opacity: 0.9 }}>Controle Integrado</div>
                             </div>
                         </div>
                     )}

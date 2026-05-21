@@ -1,4 +1,4 @@
-﻿import { cookies } from 'next/headers';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifySession } from '@/lib/session';
 import db from '@/lib/db';
@@ -13,7 +13,23 @@ function getData() {
         ORDER BY k.name ASC
     `).all();
     const employees = db.prepare('SELECT * FROM employees WHERE active = 1 ORDER BY name ASC').all();
-    return { keys, employees };
+    
+    const history = db.prepare(`
+        SELECT key_id, employee_id, COUNT(*) as count 
+        FROM history 
+        WHERE action = 'withdraw' OR action = 'transfer'
+        GROUP BY key_id, employee_id 
+        ORDER BY count DESC
+    `).all() as { key_id: number, employee_id: number, count: number }[];
+
+    const frequentUsageMap: Record<number, number[]> = {};
+    for (const row of history) {
+        if (!row.employee_id) continue;
+        if (!frequentUsageMap[row.key_id]) frequentUsageMap[row.key_id] = [];
+        frequentUsageMap[row.key_id].push(row.employee_id);
+    }
+
+    return { keys, employees, frequentUsageMap };
 }
 
 export default async function Home() {
@@ -30,7 +46,7 @@ export default async function Home() {
         redirect('/login');
     }
 
-    const { keys, employees } = getData();
+    const { keys, employees, frequentUsageMap } = getData();
 
     return (
         <main>
@@ -40,6 +56,7 @@ export default async function Home() {
                 userRole={sessionData.role || 'USER'}
                 userId={sessionData.id}
                 username={sessionData.username}
+                frequentUsageMap={frequentUsageMap}
             />
         </main>
     );

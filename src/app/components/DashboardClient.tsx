@@ -11,12 +11,14 @@ interface Key {
     employee_id?: number;
     employee_name?: string;
     employee_role?: string;
+    item_type: 'key' | 'remote' | 'equipment';
 }
 
 interface Employee {
     id: number;
     name: string;
     role?: string;
+    entity_type: 'person' | 'location';
 }
 
 interface Props {
@@ -25,9 +27,10 @@ interface Props {
     userRole: string;
     userId: number;
     username?: string;
+    frequentUsageMap?: Record<number, number[]>;
 }
 
-export default function DashboardClient({ initialKeys, initialEmployees, userRole, username }: Props) {
+export default function DashboardClient({ initialKeys, initialEmployees, userRole, username, frequentUsageMap = {} }: Props) {
     const [keys, setKeys] = useState<Key[]>(initialKeys || []);
     const [employees] = useState<Employee[]>(initialEmployees || []);
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -39,6 +42,26 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
     
     // Normalização para busca ignorando acentos
     const normalize = (str: string) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+    // Lógica inteligente de ordenação de funcionários
+    const sortEmployeesByFrequency = (employeeList: Employee[], keyId?: number) => {
+        if (!keyId || !frequentUsageMap[keyId]) {
+            return [...employeeList].sort((a, b) => a.name.localeCompare(b.name));
+        }
+        const freqIds = frequentUsageMap[keyId];
+        return [...employeeList].sort((a, b) => {
+            const idxA = freqIds.indexOf(a.id);
+            const idxB = freqIds.indexOf(b.id);
+            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            if (idxA !== -1) return -1;
+            if (idxB !== -1) return 1;
+            return a.name.localeCompare(b.name);
+        });
+    };
+
+    const getEmployeeSuggestionsForKey = (keyId?: number) => {
+        return sortEmployeesByFrequency(employees, keyId).slice(0, 5);
+    };
     
     // Sugestões Customizadas (Substituindo o datalist nativo)
     const [keySuggestions, setKeySuggestions] = useState<Key[]>([]);
@@ -225,7 +248,7 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                 {/* 1. Header with Integrated Stats */}
                 <header style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                     <div>
-                        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>Monitoramento de Chaves</h1>
+                        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>Controle Integrado de Portaria</h1>
                         <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Colégio São José - Sistema Administrativo</p>
                     </div>
                     <div style={{ display: 'flex', gap: '0.75rem' }}>
@@ -257,7 +280,7 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                     <div style={{ width: '1px', height: '24px', background: 'var(--border)' }} />
 
                     {/* Integrated Quick Action */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: '2', minWidth: '300px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: '2', minWidth: '300px', flexWrap: 'wrap' }}>
                         <div style={{ color: 'var(--gold-500)', flexShrink: 0 }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                         </div>
@@ -307,7 +330,7 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                                                 setTimeout(() => {
                                                     const empInp = document.getElementById('unified-emp-input') as HTMLInputElement;
                                                     empInp?.focus();
-                                                    setEmpSuggestions(employees.slice(0, 5));
+                                                    setEmpSuggestions(getEmployeeSuggestionsForKey(match.id));
                                                 }, 10);
                                             } else {
                                                 requestTransaction(match.id, 'return');
@@ -344,7 +367,7 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                                             setTimeout(() => {
                                                 const empInp = document.getElementById('unified-emp-input') as HTMLInputElement;
                                                 empInp?.focus();
-                                                setEmpSuggestions(employees.slice(0, 5));
+                                                setEmpSuggestions(getEmployeeSuggestionsForKey(match.id));
                                             }, 10);
                                         } else {
                                             if (withdrawField) withdrawField.style.display = 'none';
@@ -396,7 +419,7 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                                                         setTimeout(() => {
                                                             const empInp = document.getElementById('unified-emp-input') as HTMLInputElement;
                                                             empInp?.focus();
-                                                            setEmpSuggestions(employees.slice(0, 5));
+                                                            setEmpSuggestions(getEmployeeSuggestionsForKey(k.id));
                                                         }, 10);
                                                     } else {
                                                         requestTransaction(k.id, 'return');
@@ -424,9 +447,13 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                                     autoComplete="off"
                                     style={{ height: '38px', fontSize: '0.8rem', width: '220px' }}
                                     onFocus={() => {
-                                    setShowEmpDrops(true);
-                                    setEmpIndex(-1);
-                                    if (empSuggestions.length === 0) setEmpSuggestions(employees.slice(0, 5));
+                                        setShowEmpDrops(true);
+                                        setEmpIndex(-1);
+                                        if (empSuggestions.length === 0) {
+                                            const keyName = (document.getElementById('unified-key-input') as HTMLInputElement)?.value;
+                                            const key = keys.find(k => normalize(k.name) === normalize(keyName || ''));
+                                            setEmpSuggestions(getEmployeeSuggestionsForKey(key?.id));
+                                        }
                                     }}
                                     onBlur={() => setTimeout(() => setShowEmpDrops(false), 200)}
                                     onKeyDown={(e) => {
@@ -453,7 +480,10 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                                     }}
                                     onChange={(e) => {
                                         const val = normalize(e.target.value);
-                                        setEmpSuggestions(employees.filter(emp => normalize(emp.name).includes(val)).slice(0, 5));
+                                        const keyName = (document.getElementById('unified-key-input') as HTMLInputElement)?.value;
+                                        const key = keys.find(k => normalize(k.name) === normalize(keyName || ''));
+                                        const filtered = employees.filter(emp => normalize(emp.name).includes(val));
+                                        setEmpSuggestions(sortEmployeesByFrequency(filtered, key?.id).slice(0, 5));
                                         setEmpIndex(-1);
                                     }}
                                 />
@@ -558,7 +588,12 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                             <div key={key.id} className={`key-card ${key.status === 'in_use' ? 'inuse' : 'available'}`}>
                                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '2rem' }}>
                                     <div style={{ flex: 1 }} className="key-card-header-content">
-                                        <div className="key-card-title">{key.name}</div>
+                                        <div className="key-card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-muted)' }}>
+                                                {key.item_type === 'remote' ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="7" y="2" width="10" height="20" rx="2" ry="2"/><circle cx="12" cy="18" r="1"/><line x1="12" y1="6" x2="12" y2="6"/><line x1="12" y1="10" x2="12" y2="10"/><line x1="12" y1="14" x2="12" y2="14"/></svg> : key.item_type === 'equipment' ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg> : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>}
+                                            </span>
+                                            {key.name}
+                                        </div>
                                         {key.room && <div className="key-card-room">{key.room}</div>}
                                     </div>
                                     <span className={`status-tag ${key.status === 'available' ? 'status-available' : 'status-inuse'}`}>
@@ -586,9 +621,16 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                                                 onChange={e => setSelectedEmployee(prev => ({ ...prev, [key.id]: Number(e.target.value) }))}
                                             >
                                                 <option value="">Para quem?</option>
-                                                {employees.map(emp => (
-                                                    <option key={emp.id} value={emp.id}>{emp.name}</option>
-                                                ))}
+                                                <optgroup label="Pessoas">
+                                                    {sortEmployeesByFrequency(employees, key.id).filter(e => e.entity_type === 'person' || !e.entity_type).map(emp => (
+                                                        <option key={emp.id} value={emp.id}>{emp.name}</option>
+                                                    ))}
+                                                </optgroup>
+                                                <optgroup label="Locais / Destinos">
+                                                    {sortEmployeesByFrequency(employees, key.id).filter(e => e.entity_type === 'location').map(emp => (
+                                                        <option key={emp.id} value={emp.id}>{emp.name}</option>
+                                                    ))}
+                                                </optgroup>
                                             </select>
                                             <button
                                                 className="btn btn-gold btn-sm"
@@ -666,7 +708,10 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                                         alignItems: 'center',
                                         transition: 'background 0.2s ease'
                                     }} className="list-row-hover">
-                                        <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem', textAlign: 'left' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem', textAlign: 'left' }}>
+                                            <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-muted)' }}>
+                                                {key.item_type === 'remote' ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="7" y="2" width="10" height="20" rx="2" ry="2"/><circle cx="12" cy="18" r="1"/><line x1="12" y1="6" x2="12" y2="6"/><line x1="12" y1="10" x2="12" y2="10"/><line x1="12" y1="14" x2="12" y2="14"/></svg> : key.item_type === 'equipment' ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg> : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>}
+                                            </span>
                                             {key.name}
                                         </div>
                                         <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'left' }}>
@@ -705,9 +750,16 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                                                         onChange={e => setSelectedEmployee(prev => ({ ...prev, [key.id]: Number(e.target.value) }))}
                                                     >
                                                         <option value="" style={{ background: 'var(--bg-card)' }}>Escolher...</option>
-                                                        {employees.map(emp => (
-                                                            <option key={emp.id} value={emp.id} style={{ background: 'var(--bg-card)' }}>{emp.name}</option>
-                                                        ))}
+                                                        <optgroup label="Pessoas">
+                                                            {sortEmployeesByFrequency(employees, key.id).filter(e => e.entity_type === 'person' || !e.entity_type).map(emp => (
+                                                                <option key={emp.id} value={emp.id} style={{ background: 'var(--bg-card)' }}>{emp.name}</option>
+                                                            ))}
+                                                        </optgroup>
+                                                        <optgroup label="Locais / Destinos">
+                                                            {sortEmployeesByFrequency(employees, key.id).filter(e => e.entity_type === 'location').map(emp => (
+                                                                <option key={emp.id} value={emp.id} style={{ background: 'var(--bg-card)' }}>{emp.name}</option>
+                                                            ))}
+                                                        </optgroup>
                                                     </select>
                                                 </div>
                                             )}
@@ -788,7 +840,7 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                                         onChange={e => setConfirmModal(prev => ({ ...prev, employeeId: Number(e.target.value) }))}
                                     >
                                         <option value="">Selecione um funcionário...</option>
-                                        {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+                                        {sortEmployeesByFrequency(employees, confirmModal.keyId).map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
                                     </select>
                                 </div>
                             )}

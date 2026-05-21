@@ -4,7 +4,7 @@ import Sidebar from './Sidebar';
 import ConfirmModal from './ConfirmModal';
 import toast from 'react-hot-toast';
 
-interface Employee { id: number; name: string; role?: string; }
+interface Employee { id: number; name: string; role?: string; entity_type: 'person' | 'location'; }
 interface Props { initialEmployees: Employee[]; userRole: string; username?: string; }
 
 export default function EmployeesClient({ initialEmployees, userRole, username }: Props) {
@@ -16,6 +16,7 @@ export default function EmployeesClient({ initialEmployees, userRole, username }
     const [editEmp, setEditEmp] = useState<Employee | null>(null);
     const [formName, setFormName] = useState('');
     const [formRole, setFormRole] = useState('');
+    const [formEntityType, setFormEntityType] = useState<'person' | 'location'>('person');
     const [loading, setLoading] = useState(false);
     const [deleteModal, setDeleteModal] = useState<Employee | null>(null);
 
@@ -41,8 +42,8 @@ export default function EmployeesClient({ initialEmployees, userRole, username }
         ).sort((a, b) => a.name.localeCompare(b.name));
     }, [employees, search]);
 
-    const openNew = () => { setEditEmp(null); setFormName(''); setFormRole(''); setShowForm(true); };
-    const openEdit = (e: Employee) => { setEditEmp(e); setFormName(e.name); setFormRole(e.role || ''); setShowForm(true); };
+    const openNew = () => { setEditEmp(null); setFormName(''); setFormRole(''); setFormEntityType('person'); setShowForm(true); };
+    const openEdit = (e: Employee) => { setEditEmp(e); setFormName(e.name); setFormRole(e.role || ''); setFormEntityType(e.entity_type || 'person'); setShowForm(true); };
 
     const handleSave = async (ev: React.FormEvent) => {
         ev.preventDefault();
@@ -51,17 +52,17 @@ export default function EmployeesClient({ initialEmployees, userRole, username }
         try {
             const method = editEmp ? 'PUT' : 'POST';
             const body = editEmp
-                ? { id: editEmp.id, name: formName.trim(), role: formRole.trim() }
-                : { name: formName.trim(), role: formRole.trim() };
+                ? { id: editEmp.id, name: formName.trim(), role: formRole.trim(), entity_type: formEntityType }
+                : { name: formName.trim(), role: formRole.trim(), entity_type: formEntityType };
             const res = await fetch('/api/employees', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
             const data = await res.json();
             if (res.ok) {
                 if (editEmp) {
-                    setEmployees(prev => prev.map(e => e.id === editEmp.id ? { ...e, name: formName.trim(), role: formRole.trim() } : e));
-                    toast.success('Funcionário atualizado!');
+                    setEmployees(prev => prev.map(e => e.id === editEmp.id ? { ...e, name: formName.trim(), role: formRole.trim(), entity_type: formEntityType } : e));
+                    toast.success('Cadastro atualizado!');
                 } else {
-                    setEmployees(prev => [...prev, { id: data.id, name: formName.trim(), role: formRole.trim() }]);
-                    toast.success('Funcionário cadastrado!');
+                    setEmployees(prev => [...prev, { id: data.id, name: formName.trim(), role: formRole.trim(), entity_type: formEntityType }]);
+                    toast.success('Cadastrado com sucesso!');
                 }
                 setShowForm(false);
             } else { toast.error(data.error || 'Erro ao salvar.'); }
@@ -91,20 +92,20 @@ export default function EmployeesClient({ initialEmployees, userRole, username }
                 <button onClick={() => setSidebarOpen(true)} className="btn btn-ghost btn-icon">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                 </button>
-                <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-gold)' }}>Funcionários</span>
+                <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-gold)' }}>Pessoas & Locais</span>
                 <div style={{ width: 36 }} />
             </div>
 
             <main className="main-content animate-fade">
                 <div className="page-header">
                     <div>
-                        <h1 className="page-title">Funcionários</h1>
-                        <p className="page-subtitle">Gerencie os funcionários autorizados a retirar chaves</p>
+                        <h1 className="page-title">Pessoas & Locais</h1>
+                        <p className="page-subtitle">Gerencie as pessoas ou os locais de destino dos itens</p>
                     </div>
                     {isAdmin && (
                         <button className="btn btn-gold" onClick={openNew}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                            Novo Funcionário
+                            Novo Cadastro
                         </button>
                     )}
                 </div>
@@ -132,14 +133,14 @@ export default function EmployeesClient({ initialEmployees, userRole, username }
                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ display: 'block', margin: '0 auto 1rem' }}>
                             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                         </svg>
-                        <p>Nenhum funcionário encontrado.</p>
+                        <p>Nenhum registro encontrado.</p>
                     </div>
                 ) : viewMode === 'grid' ? (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
                         {filtered.map(emp => (
                             <div key={emp.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                 <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, var(--navy-600), var(--navy-400))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 700, color: 'var(--text-gold)', flexShrink: 0, border: '2px solid var(--border)' }}>
-                                    {getInitials(emp.name)}
+                                    {emp.entity_type === 'location' ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> : getInitials(emp.name)}
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.name}</div>
@@ -190,7 +191,7 @@ export default function EmployeesClient({ initialEmployees, userRole, username }
                             }} className="list-row-hover">
                                 <div style={{ display: 'flex', justifyContent: 'center' }}>
                                     <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--navy-700)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-gold)', border: '1px solid var(--border)' }}>
-                                        {getInitials(emp.name)}
+                                        {emp.entity_type === 'location' ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> : getInitials(emp.name)}
                                     </div>
                                 </div>
                                 <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem', textAlign: 'left', paddingLeft: '1rem' }}>
@@ -221,19 +222,26 @@ export default function EmployeesClient({ initialEmployees, userRole, username }
                 <div className="modal-overlay" onClick={() => setShowForm(false)}>
                     <div className="modal-box" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h3 className="modal-title">{editEmp ? 'Editar Funcionário' : 'Novo Funcionário'}</h3>
+                            <h3 className="modal-title">{editEmp ? 'Editar Cadastro' : 'Novo Cadastro'}</h3>
                             <button className="btn btn-ghost btn-icon" onClick={() => setShowForm(false)}>
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                             </button>
                         </div>
                         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             <div className="input-group">
-                                <label className="input-label">Nome Completo *</label>
-                                <input className="input" placeholder="Ex: João da Silva" value={formName} onChange={e => setFormName(e.target.value)} required />
+                                <label className="input-label">Tipo</label>
+                                <select className="input" value={formEntityType} onChange={e => setFormEntityType(e.target.value as any)}>
+                                    <option value="person">Pessoa (Funcionário)</option>
+                                    <option value="location">Local / Destino (Ex: Capela)</option>
+                                </select>
                             </div>
                             <div className="input-group">
-                                <label className="input-label">Cargo / Função</label>
-                                <input className="input" placeholder="Ex: Professor, Auxiliar..." value={formRole} onChange={e => setFormRole(e.target.value)} />
+                                <label className="input-label">{formEntityType === 'person' ? 'Nome Completo *' : 'Nome do Local *'}</label>
+                                <input className="input" placeholder={formEntityType === 'person' ? 'Ex: João da Silva' : 'Ex: Capela Central'} value={formName} onChange={e => setFormName(e.target.value)} required />
+                            </div>
+                            <div className="input-group">
+                                <label className="input-label">{formEntityType === 'person' ? 'Cargo / Função' : 'Observação (Opcional)'}</label>
+                                <input className="input" placeholder={formEntityType === 'person' ? 'Ex: Professor, Auxiliar...' : 'Ex: Deixado no balcão...'} value={formRole} onChange={e => setFormRole(e.target.value)} />
                             </div>
                             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
                                 <button type="button" className="btn btn-ghost" onClick={() => setShowForm(false)}>Cancelar</button>

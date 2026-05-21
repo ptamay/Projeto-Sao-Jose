@@ -41,10 +41,10 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: parseResult.error.issues[0]?.message || 'Inválido' }, { status: 400 });
         }
         
-        const { name, role } = parseResult.data;
+        const { name, role, entity_type } = parseResult.data;
 
-        const stmt = db.prepare('INSERT INTO employees (name, role) VALUES (?, ?)');
-        const info = stmt.run(name, role || '');
+        const stmt = db.prepare('INSERT INTO employees (name, role, entity_type) VALUES (?, ?, ?)');
+        const info = stmt.run(name, role || '', entity_type);
 
         if (user) {
             logAction(user.id, user.username, 'CREATE_EMPLOYEE', name, `Role: ${role || 'None'}`);
@@ -72,12 +72,12 @@ export async function PUT(request: Request) {
             return NextResponse.json({ error: 'ID required' }, { status: 400 });
         }
         
-        const { id, name, role } = parseResult.data;
+        const { id, name, role, entity_type } = parseResult.data;
 
         const currentEmployee = db.prepare('SELECT * FROM employees WHERE id = ?').get(id) as any;
 
-        const stmt = db.prepare('UPDATE employees SET name = ?, role = ? WHERE id = ?');
-        const info = stmt.run(name, role || '', id);
+        const stmt = db.prepare('UPDATE employees SET name = ?, role = ?, entity_type = ? WHERE id = ?');
+        const info = stmt.run(name, role || '', entity_type, id);
 
         if (info.changes === 0) {
             return NextResponse.json({ error: 'Employee not found' }, { status: 404 });

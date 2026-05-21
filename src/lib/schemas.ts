@@ -22,14 +22,16 @@ export const ChangeRoleSchema = z.object({
 export const KeySchema = z.object({
     id: z.number().int().positive().optional(),
     name: z.string().min(2, "Nome da chave deve ter no mínimo 2 caracteres."),
-    room: z.string().optional()
+    room: z.string().optional(),
+    item_type: z.enum(['key', 'remote', 'equipment']).default('key')
 });
 
 // Employees
 export const EmployeeSchema = z.object({
     id: z.number().int().positive().optional(),
     name: z.string().min(2, "Nome do funcionário muito curto."),
-    role: z.string().optional()
+    role: z.string().optional(),
+    entity_type: z.enum(['person', 'location']).default('person')
 });
 
 // Transactions (History Actions)

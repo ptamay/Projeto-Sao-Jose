@@ -46,7 +46,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: parseResult.error.issues[0]?.message || 'Inválido' }, { status: 400 });
         }
         
-        const { name, room } = parseResult.data;
+        const { name, room, item_type } = parseResult.data;
 
         // Check for duplicates
         const existing = db.prepare('SELECT id FROM keys WHERE name = ?').get(name);
@@ -54,8 +54,8 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Já existe uma chave com este nome.' }, { status: 400 });
         }
 
-        const stmt = db.prepare('INSERT INTO keys (name, room) VALUES (?, ?)');
-        const info = stmt.run(name, room || '');
+        const stmt = db.prepare('INSERT INTO keys (name, room, item_type) VALUES (?, ?, ?)');
+        const info = stmt.run(name, room || '', item_type);
 
         if (user) {
             logAction(user.id, user.username, 'CREATE_KEY', name, `Room: ${room || 'N/A'}`);
@@ -83,12 +83,12 @@ export async function PUT(request: Request) {
             return NextResponse.json({ error: 'ID required' }, { status: 400 });
         }
         
-        const { id, name, room } = parseResult.data;
+        const { id, name, room, item_type } = parseResult.data;
 
         const currentKey = db.prepare('SELECT * FROM keys WHERE id = ?').get(id) as any;
 
-        const stmt = db.prepare('UPDATE keys SET name = ?, room = ? WHERE id = ?');
-        const info = stmt.run(name, room || '', id);
+        const stmt = db.prepare('UPDATE keys SET name = ?, room = ?, item_type = ? WHERE id = ?');
+        const info = stmt.run(name, room || '', item_type, id);
 
         if (info.changes === 0) {
             return NextResponse.json({ error: 'Key not found' }, { status: 404 });
