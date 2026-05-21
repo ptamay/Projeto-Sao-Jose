@@ -271,7 +271,7 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                         <input
                             className="input"
                             style={{ paddingLeft: '2.5rem', height: '38px', background: 'transparent', border: 'none' }}
-                            placeholder="Buscar chave ou funcionário..."
+                            placeholder="Buscar item, pessoa ou local..."
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                         />
@@ -687,8 +687,8 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                                 textTransform: 'uppercase'
                             }}>
                                 <div style={{ textAlign: 'left' }}>Nome</div>
-                                <div style={{ textAlign: 'left' }}>Sala / Local</div>
-                                <div style={{ textAlign: 'left' }}>Funcionário</div>
+                                <div style={{ textAlign: 'left' }}>Descrição</div>
+                                <div style={{ textAlign: 'left' }}>Portador</div>
                                 <div style={{ textAlign: 'center' }}>Status</div>
                                 <div style={{ textAlign: 'center' }}>Ações</div>
                             </div>

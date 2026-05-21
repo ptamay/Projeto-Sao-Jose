@@ -108,7 +108,7 @@ export default function KeysClient({ initialKeys, userRole, username }: Props) {
                 <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', alignItems: 'center' }}>
                     <div className="search-bar" style={{ maxWidth: 300 }}>
                         <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        <input className="input" style={{ paddingLeft: '2.5rem' }} placeholder="Buscar item ou sala..." value={search} onChange={e => setSearch(e.target.value)} />
+                        <input className="input" style={{ paddingLeft: '2.5rem' }} placeholder="Buscar por item ou descrição..." value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
                     <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{filtered.length} ite{filtered.length !== 1 ? 'ns' : 'm'}</span>
                 </div>
@@ -128,7 +128,7 @@ export default function KeysClient({ initialKeys, userRole, username }: Props) {
                     }}>
                         <div style={{ textAlign: 'center' }}>Status</div>
                         <div style={{ textAlign: 'left', paddingLeft: '1.5rem' }}>Chave</div>
-                        <div style={{ textAlign: 'left' }}>Local / Sala</div>
+                        <div style={{ textAlign: 'left' }}>Descrição do Item</div>
                         <div style={{ textAlign: 'center' }}>Ações</div>
                     </div>
 
@@ -198,8 +198,8 @@ export default function KeysClient({ initialKeys, userRole, username }: Props) {
                                 <input className="input" placeholder={formItemType === 'key' ? 'Ex: Chave da Secretaria' : formItemType === 'remote' ? 'Ex: Controle Ar Recepção' : 'Ex: Rádio HT 1'} value={formName} onChange={e => setFormName(e.target.value)} required />
                             </div>
                             <div className="input-group">
-                                <label className="input-label">Sala / Local (Opcional)</label>
-                                <input className="input" placeholder="Ex: Sala 101, Laboratório..." value={formRoom} onChange={e => setFormRoom(e.target.value)} />
+                                <label className="input-label">Descrição do Item (Opcional)</label>
+                                <input className="input" placeholder="Ex: Sala 101, Controle de Ar, Portaria..." value={formRoom} onChange={e => setFormRoom(e.target.value)} />
                             </div>
                             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
                                 <button type="button" className="btn btn-ghost" onClick={() => setShowForm(false)}>Cancelar</button>
