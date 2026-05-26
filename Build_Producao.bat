@@ -38,6 +38,16 @@ if %errorlevel% neq 0 (
 )
 
 echo.
+echo [4.5/6] Preparando arquivos estaticos para o modo standalone...
+if exist "public" (
+    xcopy /s /e /y /i "public" ".next\standalone\public" >nul
+)
+if exist ".next\static" (
+    xcopy /s /e /y /i ".next\static" ".next\standalone\.next\static" >nul
+)
+
+
+echo.
 echo [5/6] Verificando banco de dados...
 call node scripts/init-db.js
 

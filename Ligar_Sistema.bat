@@ -1,7 +1,7 @@
 @echo off
 title Ligar Sistema Sao Jose
 echo Iniciando o sistema em modo silencioso...
-cd /d "e:\Projeto Sao Jose"
+cd /d "%~dp0"
 pm2 start ecosystem.config.js
 echo.
 echo ------------------------------------------

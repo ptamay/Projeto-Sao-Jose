@@ -4,8 +4,7 @@ module.exports = {
   apps: [
     {
       name: "sao-jose",
-      script: "node_modules/next/dist/bin/next",
-      args: "start -H 0.0.0.0",
+      script: ".next/standalone/server.js",
       cwd: __dirname,
       instances: 1,
       autorestart: true,
@@ -14,6 +13,7 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: 3000,
+        HOSTNAME: "0.0.0.0",
       },
       // Logging
       log_date_format: "YYYY-MM-DD HH:mm:ss",
