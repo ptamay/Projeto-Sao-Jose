@@ -87,7 +87,7 @@ export default function PortariaPicker({ label, options, selected, onSelect, onD
                     onBlur={() => setExpanded(false)}
                     onChange={event => {
                         onSelect();
-                            updateQuery(event.target.value);
+                        updateQuery(event.target.value);
                         setExpanded(true);
                         setActiveIndex(-1);
                     }}
@@ -108,10 +108,14 @@ export default function PortariaPicker({ label, options, selected, onSelect, onD
                             const choice = expanded ? active ?? (singleMatch ? matches[0] : undefined) : undefined;
                             if (choice) choose(choice, true);
                             else if (!term) onDefaultEnter?.();
-                        } else if (event.key === 'Escape' && expanded) {
+                        } else if (event.key === 'Escape' && !event.nativeEvent.isComposing) {
+                            const hasQuery = query.trim().length > 0;
+                            if (hasQuery && !expanded) return;
+
                             event.preventDefault();
                             setExpanded(false);
                             setActiveIndex(-1);
+                            if (!hasQuery) event.currentTarget.blur();
                         }
                     }}
                 />

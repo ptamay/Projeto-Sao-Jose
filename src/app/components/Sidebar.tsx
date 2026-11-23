@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { useRouteProgress } from './RouteProgress';
 import Image from 'next/image';
 
 interface SidebarProps {
@@ -55,6 +56,7 @@ function Icon({ name }: { name: string }) {
 export default function Sidebar({ userRole, username, onMobileClose, isOpen }: SidebarProps) {
     const router = useRouter();
     const pathname = usePathname();
+    const { navigate: navigateWithProgress } = useRouteProgress();
     const [theme, setTheme] = useState<'dark' | 'light'>('dark');
     const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -124,7 +126,7 @@ export default function Sidebar({ userRole, username, onMobileClose, isOpen }: S
     }, []);
 
     const navigate = (href: string) => {
-        router.push(href);
+        navigateWithProgress(() => router.push(href));
         onMobileClose?.();
     };
 
@@ -170,6 +172,7 @@ export default function Sidebar({ userRole, username, onMobileClose, isOpen }: S
                                     <button
                                         key={item.href}
                                         className={`nav-item${pathname === item.href ? ' active' : ''}`}
+                                        aria-current={pathname === item.href ? 'page' : undefined}
                                         onClick={() => navigate(item.href)}
                                         title={isCollapsed ? item.label : ''}
                                     >

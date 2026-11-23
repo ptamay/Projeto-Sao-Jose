@@ -1013,34 +1013,27 @@ h3 { font-size: 1.125rem; }
   font-weight: 700;
 }
 
-.portaria-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .5rem;
-}
-
 .portaria-dialog {
   margin: auto;
   width: min(calc(100% - 2rem), 30rem);
   max-height: calc(100dvh - 2rem);
   padding: 0;
   overflow: auto;
-  border-color: var(--border);
+  border: 1px solid var(--border);
   color: var(--text-primary);
 }
 
 .portaria-dialog::backdrop { background: rgb(8 15 26 / .65); }
-.portaria-dialog[data-action="return"] { max-width: 24rem; }
-.portaria-return-holder { color: var(--text-muted); font-size: .875rem; margin-top: .25rem; }
-.portaria-dialog[data-action="return"] .portaria-dialog-header { border-bottom: 0; }
+.portaria-dialog[data-action="return"] { max-width: 26rem; }
 
 .portaria-dialog-header {
-  padding: 1.25rem 1.5rem 1rem;
-  border-bottom: 1px solid var(--border);
+  padding: 1.375rem 1.25rem .875rem;
 }
 
+.portaria-dialog-header .modal-title { margin: 0; }
+
 .portaria-dialog-item {
-  margin-top: .25rem;
+  margin-top: .375rem;
   color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
@@ -1048,7 +1041,7 @@ h3 { font-size: 1.125rem; }
 .portaria-dialog-fields {
   display: grid;
   gap: 1rem;
-  padding: 1.25rem 1.5rem;
+  padding: 0 1.25rem 1.125rem;
 }
 
 .portaria-dialog-fields .input-group { gap: .375rem; }
@@ -1063,10 +1056,118 @@ h3 { font-size: 1.125rem; }
 
 .portaria-dialog-context strong { color: var(--text-primary); }
 
+.portaria-return-context {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .25rem .875rem;
+  font-size: .875rem;
+}
+
+.portaria-return-context small {
+  font-size: inherit;
+  color: var(--text-secondary);
+}
+
+.portaria-return-context strong { overflow-wrap: anywhere; }
+
 .portaria-dialog-footer {
+  display: flex;
+  align-items: center;
   justify-content: flex-end;
-  padding: .875rem 1.5rem;
+  flex-wrap: wrap;
+  gap: .375rem;
+  padding: .875rem 1.25rem;
   border-top: 1px solid var(--border);
+}
+
+.portaria-dialog-footer .btn {
+  min-height: 2.625rem;
+  padding-inline: .875rem;
+}
+
+.portaria-dialog-cancel,
+.portaria-dialog-transfer {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.portaria-dialog-cancel { border-color: var(--border); }
+
+.portaria-dialog-footer .portaria-dialog-transfer {
+  margin-inline-end: auto;
+  border-color: transparent;
+}
+
+.portaria-dialog-transfer:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+@media (max-width: 400px) {
+  .portaria-dialog-footer { padding-inline: .875rem; }
+  .portaria-dialog-footer .btn { padding-inline: .625rem; }
+}
+
+.portaria-dialog-footer .portaria-dialog-transfer { padding-inline: .375rem; }
+
+.route-loading {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 201;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.route-loading span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.route-loading::before {
+  content: '';
+  display: block;
+  width: 35%;
+  height: 100%;
+  background: var(--accent-primary);
+  transform: translateX(-100%);
+  animation: route-loading-slide 1.2s ease-in-out 160ms infinite;
+}
+
+.route-loading-navigation::before { animation: route-loading-slide 1s linear infinite; }
+
+.route-loading-navigation[data-finishing] {
+  animation: route-loading-dismiss 140ms ease-out 120ms both;
+}
+
+@keyframes route-loading-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(286%); }
+}
+
+@keyframes route-loading-dismiss {
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-loading::before {
+    width: 100%;
+    transform: none;
+    animation: route-loading-show 0s 160ms both;
+  }
+
+  .route-loading-navigation::before { animation: none; }
+}
+
+@keyframes route-loading-show {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @media (max-width: 768px) {

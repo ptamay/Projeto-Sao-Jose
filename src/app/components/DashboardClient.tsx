@@ -97,12 +97,13 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
         );
     };
 
-    const [quickSelection, setQuickSelection] = useState<{ itemId: number; chooseDestination: boolean }>();
+    const [quickSelection, setQuickSelection] = useState<{ itemId: number; action: Action }>();
     const quickItem = keys.find(item => item.id === quickSelection?.itemId);
     const dialogRef = useRef<HTMLDialogElement>(null);
     const triggerRef = useRef<HTMLElement | null>(null);
     const itemInputRef = useRef<HTMLInputElement>(null);
     const destinationInputRef = useRef<HTMLInputElement>(null);
+    const focusDestinationOnClose = useRef(false);
     const [confirmation, setConfirmation] = useState<{
         keyId: number;
         action: Action;
@@ -113,7 +114,7 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
     } | null>(null);
     const confirmingItem = keys.find(item => item.id === confirmation?.keyId);
     const confirmationOpen = confirmation !== null;
-    const showDestination = quickSelection?.chooseDestination && confirmation?.action !== 'return';
+    const showDestination = quickSelection !== undefined && quickSelection.action !== 'return';
 
     useEffect(() => {
         const dialog = dialogRef.current;
@@ -123,6 +124,11 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
             dialog.querySelector<HTMLElement>('[data-initial-focus]')?.focus();
         } else if (!confirmationOpen && dialog.open) {
             dialog.close();
+            if (focusDestinationOnClose.current) {
+                focusDestinationOnClose.current = false;
+                destinationInputRef.current?.focus();
+                return;
+            }
             const previous = triggerRef.current;
             const usable = previous?.isConnected && !previous.matches(':disabled');
             const fallback = itemInputRef.current;
@@ -146,18 +152,18 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
         return () => window.removeEventListener('keydown', focusItemSearch);
     }, [confirmationOpen]);
 
-    function pickItem(id?: number, viaKeyboard = false) {
+    function pickItem(id?: number) {
         const item = keys.find(key => key.id === id);
         if (!item) {
             setQuickSelection(undefined);
             return;
         }
         setSearch('');
-        if (viaKeyboard && item.status === 'in_use') {
+        if (item.status === 'in_use') {
             openQuickReturn(item.id);
             return;
         }
-        setQuickSelection({ itemId: item.id, chooseDestination: true });
+        setQuickSelection({ itemId: item.id, action: 'withdraw' });
         requestAnimationFrame(() => destinationInputRef.current?.focus());
     }
 
@@ -175,14 +181,19 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
     }
 
     function pickQuickDestination(id?: number, viaKeyboard = false) {
-        if (!quickItem || id === undefined) return;
-        const action = quickItem.status === 'available' ? 'withdraw' : 'transfer';
-        requestTransaction(quickItem.id, action, id, { fromQuick: true, focusConfirm: viaKeyboard });
+        if (!quickSelection || quickSelection.action === 'return' || id === undefined) return;
+        requestTransaction(quickSelection.itemId, quickSelection.action, id, { fromQuick: true, focusConfirm: viaKeyboard });
     }
 
     function openQuickReturn(itemId: number) {
-        setQuickSelection({ itemId, chooseDestination: false });
+        setQuickSelection({ itemId, action: 'return' });
         requestTransaction(itemId, 'return', undefined, { fromQuick: true, focusConfirm: true });
+    }
+
+    function chooseQuickTransfer(itemId: number) {
+        focusDestinationOnClose.current = true;
+        setQuickSelection({ itemId, action: 'transfer' });
+        setConfirmation(null);
     }
 
     async function confirmAction() {
@@ -330,15 +341,16 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                         {quickItem && showDestination && (
                             <PortariaPicker
                                 key={quickItem.id}
-                                label={quickItem.status === 'available' ? 'Destino da retirada' : 'Novo destino'}
+                                label={quickSelection.action === 'transfer' ? 'Novo destino' : 'Destino da retirada'}
                                 placeholder="Pessoa ou local de destino"
                                 inputRef={destinationInputRef}
-                                options={sortEmployeesByFrequency(employees, quickItem.id).map(employee => ({
-                                    ...employee,
-                                    details: employee.entity_type === 'location' ? 'Local' : 'Pessoa',
-                                }))}
+                                options={sortEmployeesByFrequency(employees, quickItem.id)
+                                    .filter(employee => quickSelection.action !== 'transfer' || employee.id !== quickItem.employee_id)
+                                    .map(employee => ({
+                                        ...employee,
+                                        details: employee.entity_type === 'location' ? 'Local' : 'Pessoa',
+                                    }))}
                                 onSelect={pickQuickDestination}
-                                onDefaultEnter={quickItem.status === 'in_use' ? () => openQuickReturn(quickItem.id) : undefined}
                             />
                         )}
                     </div>
@@ -583,7 +595,10 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
             </main>
 
             <dialog ref={dialogRef} className="modal-box portaria-dialog" data-action={confirmation?.action}
-                aria-labelledby="portaria-confirm-title" aria-describedby="portaria-confirm-item"
+                aria-labelledby="portaria-confirm-title"
+                aria-describedby={confirmation?.action === 'return' && confirmingItem?.employee_name
+                    ? 'portaria-confirm-item portaria-confirm-holder'
+                    : 'portaria-confirm-item'}
                 onKeyDown={event => {
                     if (event.key === 'Enter' && event.repeat) event.preventDefault();
                 }}
@@ -597,13 +612,15 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                         <header className="portaria-dialog-header">
                             <h2 id="portaria-confirm-title" className="modal-title">{actionLabels[confirmation.action]} item</h2>
                             <p id="portaria-confirm-item" className="portaria-dialog-item">{confirmingItem.name}</p>
-                            {confirmation.action === 'return' && confirmingItem.employee_name && (
-                                <p className="portaria-return-holder">
-                                    {confirmingItem.employee_type === 'location' ? 'Em ' : 'Com '}
-                                    {confirmingItem.employee_name}
-                                </p>
-                            )}
                         </header>
+                        {confirmation.action === 'return' && confirmingItem.employee_name && (
+                            <div className="portaria-dialog-fields">
+                                <div id="portaria-confirm-holder" className="portaria-dialog-context portaria-return-context">
+                                    <small>{confirmingItem.employee_type === 'location' ? 'Local atual' : 'Posse atual'}</small>
+                                    <strong>{confirmingItem.employee_name}</strong>
+                                </div>
+                            </div>
+                        )}
                         {confirmation.action !== 'return' && <div className="portaria-dialog-fields">
                             {confirmingItem.status === 'in_use' && (
                                 <div className="portaria-dialog-context"><Holder item={confirmingItem} showInitial={false} /></div>
@@ -641,8 +658,14 @@ export default function DashboardClient({ initialKeys, initialEmployees, userRol
                                 />
                             </div>
                         </div>}
-                        <div className="portaria-actions portaria-dialog-footer">
-                            <button type="button" className="btn btn-ghost" disabled={actionLoading !== null}
+                        <div className="portaria-dialog-footer">
+                            {confirmation.action === 'return' && confirmation.fromQuick && (
+                                <button type="button" className="btn btn-ghost portaria-dialog-transfer" disabled={actionLoading !== null}
+                                    onClick={() => chooseQuickTransfer(confirmingItem.id)}>
+                                    Transferir…
+                                </button>
+                            )}
+                            <button type="button" className="btn btn-ghost portaria-dialog-cancel" disabled={actionLoading !== null}
                                 data-initial-focus={(!confirmation.focusConfirm && (confirmation.action !== 'transfer' || confirmation.fromQuick)) || undefined}
                                 onClick={() => setConfirmation(null)}>
                                 Cancelar
