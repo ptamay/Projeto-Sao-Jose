@@ -14,16 +14,18 @@ Na máquina Windows x64 de preparo, instale as dependências do lockfile em uma 
 .\scripts\windows-kit\New-WindowsKit.ps1 -NodeLicense 'C:\midia\node-v24.19.0-win-x64\LICENSE'
 ```
 
-Transfira o ZIP identificado por versão e seu arquivo `.sha256`, ambos em `build\windows`. No destino, confira se o hash do ZIP obtido por `Get-FileHash .\CSJ-Portaria-*.zip` corresponde ao arquivo `.sha256` do mesmo pacote antes de extrair. Guarde a versão usada junto ao registro do teste de recuperação.
+Em `build\windows`, separe o ZIP, o `.sha256` e o `-Instalar.ps1` identificados pelo mesmo nome base. Leve os três juntos. O ZIP contém a versão da aplicação presente na pasta de preparo quando o build foi gerado. Guarde a versão usada junto ao registro do teste de recuperação.
 
 ### Instalar e recuperar após formatação
 
-1. Com a rede desligada, extraia o ZIP em uma pasta separada. Abra o Windows PowerShell como administrador na pasta extraída, execute `.\Install-Portaria.ps1` e defina a senha inicial de `admin` no prompt. Se a política local bloquear o script, confira o hash e siga a política de execução do Colégio.
+1. Com a rede desligada, abra o Windows PowerShell como administrador na pasta que contém os três arquivos. Execute o arquivo terminado em `-Instalar.ps1`, com `.\` antes do nome. O script verifica o SHA-256, extrai o ZIP em uma pasta temporária e chama o instalador. Defina a senha inicial de `admin` quando solicitado. Se a política local bloquear o script, siga a política de execução do Colégio.
 2. Abra [http://localhost:3000](http://localhost:3000) e entre com a senha definida. Reinicie a máquina com a rede desligada e confirme que a página abre novamente. Para operação, use a tarefa `CSJ-Portaria` no Agendador. Os logs ficam em `C:\ProgramData\CSJ-Portaria\logs\portaria.log`.
 3. Para recuperar uma instalação anterior, conecte a mídia de recuperação, faça uma cópia de trabalho do arquivo `.db` e use **Importar Banco (.db)** na interface administrativa. A importação restaura também os usuários, portanto entre novamente com as credenciais da base recuperada.
 4. No ensaio de recuperação, use uma base sintética. Confira no histórico quem recebeu o item na última transferência, confirme a posse atual e registre uma devolução. Confirme no painel que o item ficou disponível.
 
 O programa fica em `C:\Program Files\CSJ-Portaria`. A base, as cópias automáticas e os logs ficam em `C:\ProgramData\CSJ-Portaria`. Mantenha a cópia de recuperação fora do computador. As opções `-Destino`, `-Dados` e `-Porta` permitem informar caminhos e porta locais diferentes. Em laboratório, `-SemTarefa` prepara uma instalação isolada e informa o comando de partida manual.
+
+Para instalar a partir de um ZIP já extraído, confira primeiro o SHA-256 com `Get-FileHash` e execute `.\Install-Portaria.ps1` na pasta extraída.
 
 ## Preparar uma instalação existente com PM2
 

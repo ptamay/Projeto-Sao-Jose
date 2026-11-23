@@ -121,6 +121,7 @@ try {
     [IO.File]::Move($stagedArchive, $archive)
     '{0}  {1}.zip' -f (Get-FileHash -LiteralPath $archive).Hash, $id |
         Set-Content -LiteralPath (Join-Path $output "$id.sha256") -Encoding ASCII
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Install-PortariaKit.ps1') -Destination (Join-Path $output "$id-Instalar.ps1")
     Write-Host $archive
 } finally {
     $env:CSJ_DATA_DIR = $oldData
