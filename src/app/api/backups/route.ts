@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAvailableBackups, createBackup, deleteBackup } from '@/lib/backup';
+import { getAvailableBackups, createBackup, deleteBackup, getBackupPath } from '@/lib/backup';
 import { cookies } from 'next/headers';
 import { verifySession } from '@/lib/session';
 
@@ -28,7 +28,7 @@ export async function POST() {
     const isAdmin = await verifyAdmin();
     if (!isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const success = createBackup();
+    const success = await createBackup('manual');
     if (success) {
         return NextResponse.json({ success: true, message: 'Backup gerado com sucesso.' });
     } else {
@@ -43,8 +43,7 @@ export async function DELETE(request: Request) {
 
     try {
         const { filename } = await request.json();
-        // Validação estrita do padrão de nome do arquivo para mitigar travessia de caminho (CWE-22)
-        if (typeof filename !== 'string' || !/^keys_backup_\d{4}-\d{2}-\d{2}\.db$/.test(filename)) {
+        if (!getBackupPath(filename)) {
             return NextResponse.json({ error: 'Nome de arquivo inválido' }, { status: 400 });
         }
 
@@ -54,7 +53,7 @@ export async function DELETE(request: Request) {
         } else {
             return NextResponse.json({ error: 'Arquivo não encontrado ou erro ao excluir.' }, { status: 404 });
         }
-    } catch (e) {
+    } catch {
         return NextResponse.json({ error: 'Erro ao processar exclusão.' }, { status: 500 });
     }
 }

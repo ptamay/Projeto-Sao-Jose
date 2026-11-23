@@ -1,10 +1,11 @@
+import fs from 'fs';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { verifySession } from '@/lib/session';
-import path from 'path';
-import fs from 'fs';
-import { resetConnection } from '@/lib/db';
-import { isSafeBackupFilename } from '@/lib/backup';
+import { DatabaseBusyError } from '@/lib/db';
+import { recoverDatabase, InvalidDatabaseError } from '@/lib/db-recovery';
+import { logAction } from '@/lib/logger';
+import { getBackupPath } from '@/lib/backup';
 
 export async function POST(request: Request) {
     try {
@@ -13,41 +14,25 @@ export async function POST(request: Request) {
         const session = await verifySession(sessionCookie.value);
         if (!session || session.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-        const body = await request.json();
-        const filename = body.filename;
-        
-        // Validação estrita do padrão de nome do arquivo para mitigar travessia de caminho (CWE-22)
-        if (typeof filename !== 'string' || !/^keys_backup_\d{4}-\d{2}-\d{2}\.db$/.test(filename)) {
-            return NextResponse.json({ error: 'Nome de arquivo inválido' }, { status: 400 });
-        }
-
-        if (!isSafeBackupFilename(filename)) {
-            return NextResponse.json({ error: 'Nome de arquivo inválido' }, { status: 400 });
-        }
-
-        const backupsDir = path.resolve(process.cwd(), 'backups');
-        const backupPath = path.resolve(backupsDir, filename);
-        const dbPath = path.resolve(process.cwd(), 'keys.db');
-
-        if (!fs.existsSync(backupPath)) {
+        const body = await request.json().catch(() => null);
+        const filename = body?.filename;
+        const backupPath = getBackupPath(filename);
+        if (!backupPath) return NextResponse.json({ error: 'Nome de arquivo inválido' }, { status: 400 });
+        if (!fs.lstatSync(backupPath, { throwIfNoEntry: false })?.isFile()) {
             return NextResponse.json({ error: 'Arquivo de backup não encontrado' }, { status: 404 });
         }
 
-        console.log(`[RESTORE SYSTEM] Iniciando restauração do banco '${filename}' solicitada pelo Admin: ${session.username}.`);
-
-        // Executar cópia sincronamente enquanto o banco atual estiver fechado
-        resetConnection(() => {
-            fs.copyFileSync(backupPath, dbPath);
-            console.log(`[RESTORE SYSTEM] Arquivo físico substituído por ${filename}.`);
-        });
-
-        // Registrar a ação do administrador após voltar o banco de dados principal reativado
-        const { logAction } = require('@/lib/logger');
+        recoverDatabase(backupPath);
         logAction(session.id, session.username, 'RESTORE_BACKUP', filename, 'Sistema inteiro restaurado a partir de um backup.');
-
-        return NextResponse.json({ success: true, message: 'Restauração de sistema concluída com sucesso. O banco de dados agora está rodando na versão do backup escolhido.' });
-    } catch (e) {
-        console.error('[RESTORE SYSTEM ERROR]', e);
-        return NextResponse.json({ error: 'Erro crítico ao restaurar o banco de dados.' }, { status: 500 });
+        return NextResponse.json({ success: true, message: 'Restauração de sistema concluída com sucesso.' });
+    } catch (error) {
+        if (error instanceof InvalidDatabaseError) {
+            return NextResponse.json({ error: error.message }, { status: 400 });
+        }
+        if (error instanceof DatabaseBusyError) {
+            return NextResponse.json({ error: 'A base está ocupada. Tente novamente após concluir a operação em andamento.' }, { status: 409 });
+        }
+        console.error('[RESTORE SYSTEM ERROR]', error);
+        return NextResponse.json({ error: 'Erro ao restaurar o banco de dados.' }, { status: 500 });
     }
 }

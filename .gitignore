@@ -43,6 +43,9 @@ next-env.d.ts
 # database
 keys.db
 keys.db-journal
+keys.db-wal
+keys.db-shm
+.keys-restore-*
 
 # backups and logs
 /backups/

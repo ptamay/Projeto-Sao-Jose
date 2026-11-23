@@ -5,7 +5,9 @@ import { verifySession } from '@/lib/session';
 
 export async function GET() {
     try {
-        const settingsArr = db.prepare("SELECT key, value FROM settings").all() as { key: string, value: string }[];
+        const settingsArr = db.prepare(
+            "SELECT key, value FROM settings WHERE key IN ('auto_logout_time', 'backup_time', 'backup_retention_count')"
+        ).all() as { key: string, value: string }[];
         
         const settingsMap: Record<string, string> = {};
         settingsArr.forEach(s => settingsMap[s.key] = s.value);
@@ -13,11 +15,10 @@ export async function GET() {
         return NextResponse.json({ 
             autoLogoutTime: settingsMap['auto_logout_time'] || '18:30',
             backupTime: settingsMap['backup_time'] || '03:00',
-            backupCount: parseInt(settingsMap['backup_retention_count'] || '3', 10),
-            defaultResetPassword: settingsMap['default_reset_password'] || 'saojose123'
+            backupCount: parseInt(settingsMap['backup_retention_count'] || '3', 10)
         });
-    } catch (e) {
-        return NextResponse.json({ autoLogoutTime: '18:30', backupTime: '03:00', backupCount: 3, defaultResetPassword: 'saojose123' });
+    } catch {
+        return NextResponse.json({ autoLogoutTime: '18:30', backupTime: '03:00', backupCount: 3 });
     }
 }
 
@@ -42,9 +43,6 @@ export async function POST(req: Request) {
             }
             if (body.backupCount !== undefined) {
                 db.prepare("INSERT INTO settings (key, value) VALUES ('backup_retention_count', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(body.backupCount));
-            }
-            if (body.defaultResetPassword) {
-                db.prepare("INSERT INTO settings (key, value) VALUES ('default_reset_password', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(body.defaultResetPassword);
             }
         });
         trans();

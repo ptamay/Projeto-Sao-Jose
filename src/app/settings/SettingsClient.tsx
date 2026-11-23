@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
 import toast from 'react-hot-toast';
 
@@ -19,7 +19,6 @@ export default function SettingsClient() {
     const [backupTime, setBackupTime] = useState('03:00');
     const [backupCount, setBackupCount] = useState(3);
     const [autoLogoutTime, setAutoLogoutTime] = useState('18:30');
-    const [defaultResetPassword, setDefaultResetPassword] = useState('saojose123');
     const [backups, setBackups] = useState<Backup[]>([]);
     const [loadingBkp, setLoadingBkp] = useState(true);
     const [savingSettings, setSavingSettings] = useState(false);
@@ -27,20 +26,26 @@ export default function SettingsClient() {
     const [restoringBkp, setRestoringBkp] = useState(false);
     const [importingDb, setImportingDb] = useState(false);
 
+    const loadBackups = useCallback(async () => {
+        try {
+            const response = await fetch('/api/backups');
+            const data = await response.json();
+            setBackups(Array.isArray(data) ? data : []);
+        } catch {
+            setBackups([]);
+        } finally {
+            setLoadingBkp(false);
+        }
+    }, []);
+
     useEffect(() => {
         fetch('/api/settings').then(r => r.json()).then(d => {
             if (d.backupTime) setBackupTime(d.backupTime);
             if (d.backupCount) setBackupCount(d.backupCount);
             if (d.autoLogoutTime) setAutoLogoutTime(d.autoLogoutTime);
-            if (d.defaultResetPassword) setDefaultResetPassword(d.defaultResetPassword);
         });
         loadBackups();
-    }, []);
-
-    const loadBackups = () => {
-        setLoadingBkp(true);
-        fetch('/api/backups').then(r => r.json()).then(d => { setBackups(Array.isArray(d) ? d : []); setLoadingBkp(false); });
-    };
+    }, [loadBackups]);
 
     const saveSettings = async () => {
         setSavingSettings(true);
@@ -51,8 +56,7 @@ export default function SettingsClient() {
                 body: JSON.stringify({ 
                     backupTime, 
                     backupCount, 
-                    autoLogoutTime, 
-                    defaultResetPassword 
+                    autoLogoutTime
                 }) 
             });
             if (res.ok) toast.success('Configurações salvas!');
@@ -66,7 +70,11 @@ export default function SettingsClient() {
         try {
             const res = await fetch('/api/backups', { method: 'POST' });
             const d = await res.json();
-            if (res.ok) { toast.success('Backup gerado!'); loadBackups(); }
+            if (res.ok) {
+                toast.success('Backup gerado!');
+                setLoadingBkp(true);
+                await loadBackups();
+            }
             else { toast.error(d.error || 'Erro ao gerar backup.'); }
         } catch { toast.error('Erro de conexão.'); }
         setGeneratingBkp(false);
@@ -170,11 +178,6 @@ export default function SettingsClient() {
                                 <label className="input-label">Horário de Logout Automático</label>
                                 <input className="input" type="time" value={autoLogoutTime} onChange={e => setAutoLogoutTime(e.target.value)} />
                                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Horário em que o sistema força o logout de todos os usuários.</span>
-                            </div>
-                            <div className="input-group">
-                                <label className="input-label">Senha Padrão de Reset</label>
-                                <input className="input" type="text" value={defaultResetPassword} onChange={e => setDefaultResetPassword(e.target.value)} />
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Senha utilizada ao resetar o acesso de um usuário.</span>
                             </div>
                             <button className="btn btn-gold" onClick={saveSettings} disabled={savingSettings} style={{ alignSelf: 'flex-start' }}>
                                 {savingSettings ? <div className="spinner" style={{ width: 16, height: 16 }} /> : 'Salvar Sistema'}

@@ -1,146 +1,113 @@
 import fs from 'fs';
 import path from 'path';
+import { randomUUID } from 'crypto';
 import cron from 'node-cron';
-import db from './db';
+import db, { backupDatabase } from './db';
 
-const dbPath = path.resolve(process.cwd(), 'keys.db');
 const backupsDir = path.resolve(process.cwd(), 'backups');
+const backupFilenamePattern = /^keys_backup_\d{4}-\d{2}-\d{2}(?:_\d{13}_[0-9a-f-]{36})?\.db$/;
+const globalWithBackup = globalThis as typeof globalThis & {
+    csjBackupQueue?: Promise<void>;
+    csjBackupCronStarted?: boolean;
+};
 
-let lastBackupDay = ''; // YYYY-MM-DD to prevent duplicates
-
-// Certifique-se de que a pasta de backups existe
-if (!fs.existsSync(backupsDir)) {
-    fs.mkdirSync(backupsDir, { recursive: true });
+function localDay(date: Date) {
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${date.getFullYear()}-${month}-${day}`;
 }
 
-export function createBackup() {
-    try {
-        if (!fs.existsSync(dbPath)) {
-            console.error('Database file not found. Skipping backup.');
-            return false;
-        }
-
-        const date = new Date();
-        const yyyy = date.getFullYear();
-        const mm = String(date.getMonth() + 1).padStart(2, '0');
-        const dd = String(date.getDate()).padStart(2, '0');
-        const timestamp = `${yyyy}-${mm}-${dd}`; 
-
-        // Prevent duplicate run on same day
-        if (lastBackupDay === timestamp) return true;
-
-        const backupFilename = `keys_backup_${timestamp}.db`;
-        const destPath = path.resolve(backupsDir, backupFilename);
-
-        fs.copyFileSync(dbPath, destPath);
-        lastBackupDay = timestamp;
-        console.log(`[Backup Automático] Banco de dados salvo com sucesso em: ${backupFilename}`);
-
-        // Rotação de Backups Dinâmica (Lê do Banco)
-        let retentionCount = 3;
-        try {
-            const row = db.prepare("SELECT value FROM settings WHERE key = 'backup_retention_count'").get() as { value: string };
-            if (row) retentionCount = parseInt(row.value, 10);
-        } catch (e) {
-            console.error('[Backup] Erro ao ler retention_count, usando padrão 3');
-        }
-
-        const currentBackups = getAvailableBackups();
-        if (currentBackups.length > retentionCount) {
-            const filesToDelete = currentBackups.slice(retentionCount);
-            filesToDelete.forEach(bkp => {
-                try {
-                    fs.unlinkSync(path.resolve(backupsDir, bkp.filename));
-                    console.log(`[Backup Automático] Backup antigo removido (Limite: ${retentionCount}): ${bkp.filename}`);
-                } catch (err) {
-                    console.error(`[Backup Automático] Erro ao remover ${bkp.filename}`, err);
-                }
-            });
-        }
-
-        return true;
-    } catch (e) {
-        console.error('[Backup Error]', e);
-        return false;
+export function getBackupPath(filename: unknown) {
+    if (typeof filename !== 'string' || !backupFilenamePattern.test(filename) || !filename.endsWith('.db')) {
+        return null;
     }
+    return path.join(backupsDir, filename);
+}
+
+export function createBackup(mode: 'manual' | 'automatic') {
+    const job = (globalWithBackup.csjBackupQueue ?? Promise.resolve()).then(async () => {
+        let stagingDir: string | undefined;
+        try {
+            fs.mkdirSync(backupsDir, { recursive: true });
+            const now = new Date();
+            const day = localDay(now);
+            const suffix = mode === 'manual' ? `_${now.getTime()}_${randomUUID()}` : '';
+            const filename = `keys_backup_${day}${suffix}.db`;
+            const destination = path.join(backupsDir, filename);
+            if (mode === 'automatic' && fs.existsSync(destination)) return true;
+
+            const row = db.prepare("SELECT value FROM settings WHERE key = 'backup_retention_count'").get() as { value: string } | undefined;
+            const retention = Number(row?.value);
+            const limit = Number.isInteger(retention) && retention >= 1 && retention <= 50 ? retention : 3;
+
+            stagingDir = fs.mkdtempSync(path.join(backupsDir, '.backup-'));
+            const stagedPath = path.join(stagingDir, 'snapshot.db');
+            await backupDatabase(stagedPath);
+            fs.renameSync(stagedPath, destination);
+            const otherBackups = getAvailableBackups().filter(backup => backup.filename !== filename);
+            for (const backup of otherBackups.slice(limit - 1)) deleteBackup(backup.filename);
+            return true;
+        } catch (error) {
+            console.error('[Backup] Erro ao criar cópia:', error);
+            return false;
+        } finally {
+            if (stagingDir) {
+                try {
+                    for (const file of fs.readdirSync(stagingDir)) {
+                        fs.unlinkSync(path.join(stagingDir, file));
+                    }
+                    fs.rmdirSync(stagingDir);
+                } catch (error) {
+                    console.error('[Backup] Erro ao limpar a área temporária:', error);
+                }
+            }
+        }
+    });
+    globalWithBackup.csjBackupQueue = job.then(() => undefined);
+    return job;
 }
 
 export function getAvailableBackups() {
     try {
         if (!fs.existsSync(backupsDir)) return [];
-        const files = fs.readdirSync(backupsDir);
-        return files
-            .filter(f => f.startsWith('keys_backup_') && f.endsWith('.db'))
-            .map(f => {
-                const stat = fs.statSync(path.join(backupsDir, f));
-                return {
-                    filename: f,
-                    createdAt: stat.mtime,
-                    size: stat.size
-                };
+        return fs.readdirSync(backupsDir, { withFileTypes: true })
+            .filter(file => file.isFile() && getBackupPath(file.name))
+            .map(file => {
+                const stat = fs.statSync(path.join(backupsDir, file.name));
+                return { filename: file.name, createdAt: stat.mtime, size: stat.size };
             })
             .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    } catch (e) {
-        console.error('[Backup Read Error]', e);
+    } catch (error) {
+        console.error('[Backup] Erro ao listar cópias:', error);
         return [];
     }
 }
 
-export function isSafeBackupFilename(filename: string): boolean {
-    if (typeof filename !== 'string') return false;
-
-    // Aceita apenas nomes de arquivo de backup esperados (sem componentes de caminho)
-    const backupFilenamePattern = /^keys_backup_\d{4}-\d{2}-\d{2}\.db$/;
-    if (!backupFilenamePattern.test(filename)) return false;
-
-    // Garante que o caminho final permaneça dentro de backupsDir
-    const filePath = path.resolve(backupsDir, filename);
-    const normalizedBackupsDir = path.resolve(backupsDir) + path.sep;
-    return filePath.startsWith(normalizedBackupsDir);
-}
-
-export function deleteBackup(filename: string) {
+export function deleteBackup(filename: unknown) {
+    const filePath = getBackupPath(filename);
+    if (!filePath) return false;
     try {
-        if (!isSafeBackupFilename(filename)) return false;
-
-        const filePath = path.resolve(backupsDir, filename);
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-            return true;
-        }
-        return false;
-    } catch (e) {
-        console.error('[Backup Delete Error]', e);
+        if (!fs.lstatSync(filePath, { throwIfNoEntry: false })?.isFile()) return false;
+        fs.unlinkSync(filePath);
+        return true;
+    } catch (error) {
+        console.error('[Backup] Erro ao excluir cópia:', error);
         return false;
     }
 }
 
-
-// Inicializa a Rotina de Backup ("Checagem por minuto")
-let isCronStarted = false;
-
 export function startCronJobs() {
-    if (isCronStarted) return;
-    
-    // Agendador Dinâmico: Roda a cada minuto
-    cron.schedule('* * * * *', () => {
+    if (globalWithBackup.csjBackupCronStarted) return;
+    cron.schedule('* * * * *', async () => {
         const now = new Date();
         const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
         try {
-            // Busca o horário agendado no banco
-            const row = db.prepare("SELECT value FROM settings WHERE key = 'backup_time'").get() as { value: string };
-            const scheduledTime = row?.value || '03:00';
-
-            if (currentHHMM === scheduledTime) {
-                console.log(`[Backup] Horário atingido (${currentHHMM}). Iniciando...`);
-                createBackup();
-            }
-        } catch (err) {
-            console.error('[Cron] Erro ao verificar horário de backup no banco', err);
+            const row = db.prepare("SELECT value FROM settings WHERE key = 'backup_time'").get() as { value: string } | undefined;
+            if (currentHHMM === (row?.value || '03:00')) await createBackup('automatic');
+        } catch (error) {
+            console.error('[Cron] Erro ao verificar horário de backup:', error);
         }
     });
-
-    isCronStarted = true;
-    console.log('CronJob de backup dinâmico inicializado.');
+    globalWithBackup.csjBackupCronStarted = true;
 }
