@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { replaceDatabase } from './db';
 import { initializeSchema } from './db-schema';
+import { dataPath } from './data-directory';
 
 export class InvalidDatabaseError extends Error {}
 
@@ -41,7 +42,7 @@ function validateCandidate(filename: string) {
 }
 
 export function recoverDatabase(source: Buffer | string) {
-    const stagingDir = fs.mkdtempSync(path.join(process.cwd(), '.keys-restore-'));
+    const stagingDir = fs.mkdtempSync(dataPath('.keys-restore-'));
     const stagedPath = path.join(stagingDir, 'candidate.db');
     try {
         if (Buffer.isBuffer(source)) {

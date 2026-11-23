@@ -1,15 +1,16 @@
 import Database from 'better-sqlite3';
-import path from 'path';
 import fs from 'fs';
 import { initializeSchema } from './db-schema';
+import { normalizeSearch } from './search';
+import { dataPath } from './data-directory';
 
 const globalWithDb = globalThis as typeof globalThis & {
     db?: Database.Database;
     csjActiveBackups?: number;
 };
 
-const dbPath = path.resolve(process.cwd(), 'keys.db');
-const previousPath = path.resolve(process.cwd(), '.keys-restore-previous.db');
+const dbPath = dataPath('keys.db');
+const previousPath = dataPath('.keys-restore-previous.db');
 
 export class DatabaseBusyError extends Error {}
 
@@ -19,6 +20,7 @@ function openDatabase() {
         instance.pragma('trusted_schema = OFF');
         instance.pragma('foreign_keys = ON');
         initializeSchema(instance);
+        instance.function('normalize_search', { deterministic: true }, (value: string | null) => normalizeSearch(value ?? ''));
         instance.pragma('journal_mode = WAL');
         return instance;
     } catch (error) {

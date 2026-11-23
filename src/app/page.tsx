@@ -3,10 +3,11 @@ import { redirect } from 'next/navigation';
 import { verifySession } from '@/lib/session';
 import db from '@/lib/db';
 import DashboardClient from './components/DashboardClient';
+import type { ItemUsage } from './components/DashboardClient';
 
 function getData() {
     const keys = db.prepare(`
-        SELECT k.*, e.name as employee_name, e.role as employee_role
+        SELECT k.*, e.name as employee_name, e.role as employee_role, e.entity_type as employee_type
         FROM keys k
         LEFT JOIN employees e ON k.employee_id = e.id
         WHERE k.active = 1
@@ -17,19 +18,18 @@ function getData() {
     const history = db.prepare(`
         SELECT key_id, employee_id, COUNT(*) as count 
         FROM history 
-        WHERE action = 'withdraw' OR action = 'transfer'
+        WHERE key_id IS NOT NULL AND action IN ('withdraw', 'transfer')
         GROUP BY key_id, employee_id 
-        ORDER BY count DESC
-    `).all() as { key_id: number, employee_id: number, count: number }[];
+    `).all() as { key_id: number; employee_id: number | null; count: number }[];
 
-    const frequentUsageMap: Record<number, number[]> = {};
+    const usageByItem: Record<number, ItemUsage> = {};
     for (const row of history) {
-        if (!row.employee_id) continue;
-        if (!frequentUsageMap[row.key_id]) frequentUsageMap[row.key_id] = [];
-        frequentUsageMap[row.key_id].push(row.employee_id);
+        const entry = usageByItem[row.key_id] ??= { total: 0, destinations: {} };
+        entry.total += row.count;
+        if (row.employee_id !== null) entry.destinations[row.employee_id] = row.count;
     }
 
-    return { keys, employees, frequentUsageMap };
+    return { keys, employees, usageByItem };
 }
 
 export default async function Home() {
@@ -46,7 +46,7 @@ export default async function Home() {
         redirect('/login');
     }
 
-    const { keys, employees, frequentUsageMap } = getData();
+    const { keys, employees, usageByItem } = getData();
 
     return (
         <main>
@@ -56,7 +56,7 @@ export default async function Home() {
                 userRole={sessionData.role || 'USER'}
                 userId={sessionData.id}
                 username={sessionData.username}
-                frequentUsageMap={frequentUsageMap}
+                initialUsage={usageByItem}
             />
         </main>
     );

@@ -77,7 +77,7 @@ export default function EmployeesClient({ initialEmployees, userRole, username }
             const data = await res.json();
             if (res.ok) {
                 setEmployees(prev => prev.filter(e => e.id !== deleteModal.id));
-                toast.success('Funcionário removido.');
+                toast.success('Cadastro removido.');
             } else { toast.error(data.error || 'Erro ao remover.'); }
         } catch { toast.error('Erro de conexão.'); }
         setDeleteModal(null);
@@ -231,8 +231,8 @@ export default function EmployeesClient({ initialEmployees, userRole, username }
                             <div className="input-group">
                                 <label className="input-label">Tipo</label>
                                 <select className="input" value={formEntityType} onChange={e => setFormEntityType(e.target.value as any)}>
-                                    <option value="person">Pessoa (Funcionário)</option>
-                                    <option value="location">Local / Destino (Ex: Capela)</option>
+                                    <option value="person">Pessoa</option>
+                                    <option value="location">Local</option>
                                 </select>
                             </div>
                             <div className="input-group">
@@ -254,7 +254,7 @@ export default function EmployeesClient({ initialEmployees, userRole, username }
                 </div>
             )}
 
-            <ConfirmModal isOpen={!!deleteModal} title="Remover Funcionário" message={`Deseja remover "${deleteModal?.name}"?`} confirmText="Remover" onConfirm={handleDelete} onCancel={() => setDeleteModal(null)} />
+            <ConfirmModal isOpen={!!deleteModal} title="Remover cadastro" message={`Deseja remover "${deleteModal?.name}"?`} confirmText="Remover" onConfirm={handleDelete} onCancel={() => setDeleteModal(null)} />
         </div>
     );
 }

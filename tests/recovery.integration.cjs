@@ -98,10 +98,12 @@ test('recuperação e acesso com SQLite sintético pelas rotas Next.js', { timeo
         fs.symlinkSync(path.join(project, 'node_modules'), path.join(dir, 'node_modules'), 'junction');
         assert.equal(fs.existsSync(databasePath), false);
 
+        const fontMock = path.join(dir, 'fonts.cjs');
+        fs.writeFileSync(fontMock, 'module.exports = new Proxy({}, { get: () => "@font-face { font-family: Inter; src: local(Arial); }" });');
         server = spawn(process.execPath, ['-e', runServer], {
             cwd: dir,
             windowsHide: true,
-            env: { ...process.env, NODE_ENV: 'development', NEXT_TELEMETRY_DISABLED: '1' },
+            env: { ...process.env, NODE_ENV: 'development', NEXT_TELEMETRY_DISABLED: '1', NEXT_FONT_GOOGLE_MOCKED_RESPONSES: fontMock },
         });
         server.stdout.on('data', chunk => { serverLog = (serverLog + chunk).slice(-16000); });
         server.stderr.on('data', chunk => { serverLog = (serverLog + chunk).slice(-16000); });
@@ -223,6 +225,30 @@ test('recuperação e acesso com SQLite sintético pelas rotas Next.js', { timeo
             assert.equal(db.prepare("SELECT COUNT(*) FROM action_logs WHERE action = 'IMPORT_DATABASE'").pluck().get(), 1);
         });
         await post('/api/transactions', 200, porter, { action: 'withdraw', key_id: 1, employee_id: 1 });
+
+        usingDb(databasePath, db => {
+            db.exec("INSERT INTO keys (name, item_type) VALUES ('Rádio % reserva', 'equipment')");
+            const add = db.prepare("INSERT INTO history (key_id, action, timestamp, username) VALUES (?, 'return', ?, ?)");
+            db.transaction(() => {
+                add.run(2, '2001-01-01T08:00:00Z', 'porteiro-teste');
+                for (let i = 0; i < 51; i++) add.run(1, '2025-01-02T08:00:00Z', 'porteiro-teste');
+            })();
+        });
+
+        async function historyPage(query = '') {
+            const response = await fetch(baseUrl + '/history' + query, {
+                headers: { Cookie: porter }, signal: AbortSignal.timeout(30_000),
+            });
+            assert.equal(response.status, 200);
+            return (await response.text()).replace(/<!--.*?-->/g, '');
+        }
+
+        assert.doesNotMatch(await historyPage(), /Rádio % reserva/);
+        const oldMatch = await historyPage('?q=RADIO+%25&page=9');
+        assert.match(oldMatch, /Rádio % reserva/);
+        assert.match(oldMatch, /1 registro · Página 1 de 1/);
+        assert.doesNotMatch(oldMatch, /Chave legada/);
+        assert.match(await historyPage('?q=chave+legada&page=2'), /53 registros · Página 2 de 2/);
     } catch (error) {
         throw new Error(serverLog, { cause: error });
     } finally {

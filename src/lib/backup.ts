@@ -3,8 +3,9 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import cron from 'node-cron';
 import db, { backupDatabase } from './db';
+import { dataPath } from './data-directory';
 
-const backupsDir = path.resolve(process.cwd(), 'backups');
+const backupsDir = dataPath('backups');
 const backupFilenamePattern = /^keys_backup_\d{4}-\d{2}-\d{2}(?:_\d{13}_[0-9a-f-]{36})?\.db$/;
 const globalWithBackup = globalThis as typeof globalThis & {
     csjBackupQueue?: Promise<void>;

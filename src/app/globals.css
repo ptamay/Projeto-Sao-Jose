@@ -1,4 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter.ttf') format('truetype');
+  font-weight: 100 900;
+  font-display: swap;
+}
 
 @tailwind base;
 @tailwind components;
@@ -129,7 +134,6 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: var(--gold-500); }
 
 /* ── Typography ─────────────────────────────────────────────── */
-.font-display { font-family: 'Playfair Display', serif; }
 h1, h2, h3 { color: var(--text-primary); font-weight: 700; }
 h1 { font-size: 1.875rem; line-height: 1.2; }
 h2 { font-size: 1.375rem; }
@@ -814,6 +818,273 @@ h3 { font-size: 1.125rem; }
   color: var(--text-primary);
 }
 .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.portaria-main { min-width: 0; }
+
+.portaria-control {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.portaria-control-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: .25rem 1rem;
+  margin-bottom: .75rem;
+}
+
+.portaria-control-header h2 { font-size: 1rem; }
+.portaria-control-header p { font-size: .8125rem; color: var(--text-secondary); }
+
+.portaria-quick {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: .75rem;
+  min-width: 0;
+}
+
+.portaria-picker {
+  position: relative;
+  min-width: 0;
+}
+
+.portaria-quick[data-with-destination] {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+}
+
+.portaria-item-button {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: start;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-weight: 700;
+}
+
+.portaria-list .portaria-item-button { font-size: .9rem; }
+
+.portaria-item-button:hover {
+  color: var(--text-gold);
+  text-decoration: underline;
+}
+
+.portaria-item-button:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 4px;
+  border-radius: .25rem;
+}
+
+.portaria-field-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.portaria-picker-input { position: relative; }
+.portaria-picker-input .input { min-height: 3.5rem; }
+
+.portaria-picker-input[data-search] .input {
+  padding-inline-start: 2.75rem;
+  padding-inline-end: 3rem;
+}
+
+.portaria-picker-input[data-status] .input { padding-inline-end: 7.25rem; }
+
+.portaria-search-icon,
+.portaria-picker-indicator {
+  position: absolute;
+  inset-block-start: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.portaria-search-icon { inset-inline-start: 1rem; color: var(--text-gold); }
+.portaria-picker-indicator { inset-inline-end: .875rem; }
+
+.portaria-control kbd {
+  display: inline-block;
+  padding: 0 .35em;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: .375rem;
+  font: 600 .75rem/1.5 Inter, sans-serif;
+}
+
+.portaria-popup {
+  position: absolute;
+  inset: calc(100% + .375rem) 0 auto;
+  z-index: 20;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.portaria-options {
+  max-height: min(15rem, 38dvh);
+  overflow: auto;
+  list-style: none;
+  margin: 0;
+  padding: .25rem;
+}
+
+.portaria-picker-keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .375rem .875rem;
+  padding: .5rem .75rem;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  font-size: .75rem;
+}
+
+.portaria-options li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  padding: .55rem .625rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.portaria-option-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.portaria-options .status-tag { flex-shrink: 0; }
+.portaria-options li + li { box-shadow: inset 0 1px var(--border); }
+
+.portaria-options li:hover,
+.portaria-options li[aria-selected="true"] { background: var(--bg-elevated); }
+
+.portaria-options small,
+.portaria-holder small { color: var(--text-secondary); }
+
+.portaria-holder,
+.portaria-holder-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.portaria-holder[data-with-initial] {
+  flex-direction: row;
+  align-items: center;
+  gap: .625rem;
+}
+
+.portaria-holder-initial {
+  display: grid;
+  place-items: center;
+  flex: 0 0 2rem;
+  width: 2rem;
+  height: 2rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  color: var(--text-primary);
+  font-size: .8125rem;
+  font-weight: 700;
+}
+
+.portaria-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
+.portaria-dialog {
+  margin: auto;
+  width: min(calc(100% - 2rem), 30rem);
+  max-height: calc(100dvh - 2rem);
+  padding: 0;
+  overflow: auto;
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+.portaria-dialog::backdrop { background: rgb(8 15 26 / .65); }
+.portaria-dialog[data-action="return"] { max-width: 24rem; }
+.portaria-return-holder { color: var(--text-muted); font-size: .875rem; margin-top: .25rem; }
+.portaria-dialog[data-action="return"] .portaria-dialog-header { border-bottom: 0; }
+
+.portaria-dialog-header {
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.portaria-dialog-item {
+  margin-top: .25rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.portaria-dialog-fields {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+}
+
+.portaria-dialog-fields .input-group { gap: .375rem; }
+.portaria-dialog-fields .input-label { margin: 0; }
+
+.portaria-dialog-context {
+  padding: .625rem .875rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.portaria-dialog-context strong { color: var(--text-primary); }
+
+.portaria-dialog-footer {
+  justify-content: flex-end;
+  padding: .875rem 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 768px) {
+  .portaria-main { transition: none; }
+  .portaria-quick[data-with-destination] { grid-template-columns: minmax(0, 1fr); }
+  .portaria-list .portaria-list-head { display: none !important; }
+  .portaria-list .list-row-hover {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    padding: .75rem !important;
+    gap: .5rem !important;
+    overflow-wrap: anywhere;
+  }
+  .portaria-list .list-row-hover > :last-child {
+    grid-column: 1 / -1;
+    justify-content: flex-start !important;
+    flex-wrap: wrap;
+  }
+}
 
 /* ── Select ──────────────────────────────────────────────────── */
 select.input {

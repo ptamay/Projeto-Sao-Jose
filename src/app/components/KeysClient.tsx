@@ -74,7 +74,7 @@ export default function KeysClient({ initialKeys, userRole, username }: Props) {
             const data = await res.json();
             if (res.ok) {
                 setKeys(prev => prev.filter(k => k.id !== deleteModal.id));
-                toast.success('Chave removida.');
+                toast.success('Item removido.');
             } else { toast.error(data.error || 'Erro ao remover.'); }
         } catch { toast.error('Erro de conexão.'); }
         setDeleteModal(null);
@@ -127,14 +127,14 @@ export default function KeysClient({ initialKeys, userRole, username }: Props) {
                         textTransform: 'uppercase'
                     }}>
                         <div style={{ textAlign: 'center' }}>Status</div>
-                        <div style={{ textAlign: 'left', paddingLeft: '1.5rem' }}>Chave</div>
+                        <div style={{ textAlign: 'left', paddingLeft: '1.5rem' }}>Item</div>
                         <div style={{ textAlign: 'left' }}>Descrição do Item</div>
                         <div style={{ textAlign: 'center' }}>Ações</div>
                     </div>
 
                     {filtered.length === 0 ? (
                         <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                            Nenhuma chave encontrada.
+                            Nenhum item encontrado.
                         </div>
                     ) : filtered.map(k => (
                         <div key={k.id} style={{ 
@@ -214,8 +214,8 @@ export default function KeysClient({ initialKeys, userRole, username }: Props) {
 
             <ConfirmModal
                 isOpen={!!deleteModal}
-                title="Remover Chave"
-                message={`Deseja remover a chave "${deleteModal?.name}"? Esta ação não pode ser desfeita.`}
+                title="Remover item"
+                message={`Deseja remover o item "${deleteModal?.name}"? Esta ação não pode ser desfeita.`}
                 confirmText="Remover"
                 onConfirm={handleDelete}
                 onCancel={() => setDeleteModal(null)}
