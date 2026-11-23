@@ -43,7 +43,13 @@ $extract = Join-Path $temp ('csj-extracao-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $extract | Out-Null
 try {
     Write-Host 'Kit verificado. Extraindo os arquivos de instalacao...'
-    Expand-Archive -LiteralPath $archive.FullName -DestinationPath $extract
+    $tar = Get-Command tar.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($tar) {
+        & $tar.Source -xf $archive.FullName -C $extract
+        if ($LASTEXITCODE) { throw 'Falha ao extrair os arquivos do kit.' }
+    } else {
+        Expand-Archive -LiteralPath $archive.FullName -DestinationPath $extract
+    }
     & (Join-Path $extract 'Install-Portaria.ps1') @options
 } finally {
     $resolved = (Resolve-Path -LiteralPath $extract).Path
